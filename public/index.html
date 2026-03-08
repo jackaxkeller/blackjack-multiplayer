@@ -486,23 +486,6 @@
   .lobby-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(122,224,255,.12);border:1px solid rgba(122,224,255,.24);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#c9f6ff}
   .lobby-code{font-size:18px;letter-spacing:.22em;color:#fff}
 
-  @media (min-width: 921px){
-    .menu-card{
-      transform:scale(.9);
-      transform-origin:center center;
-    }
-    .rules{
-      align-self:start;
-      padding:14px 16px;
-    }
-    .rules ul{
-      grid-template-columns:1fr 1fr;
-      gap:6px 18px;
-      font-size:14px;
-    }
-  }
-
-
   @media (max-width: 920px){
     .menu-card{
       width:min(98vw, 760px);
@@ -950,6 +933,10 @@
     ui.dealSpeedSlider.value = String(state.speedLevel);
     configureSpeed();
     syncMusicButton();
+    if(ui.menu){
+      if(state.started) ui.menu.classList.add('hidden');
+      else ui.menu.classList.remove('hidden');
+    }
     updateLobbyUI();
     updateUI();
     updateButtons();
@@ -1763,9 +1750,8 @@
   }
 
   function updateUI(){
-    const playerInfo = getPerspectivePlayerInfo();
-    ui.bankroll.textContent = `$${Number(playerInfo.bankroll || 0).toFixed(0)}`;
-    ui.bet.textContent = `$${Number(playerInfo.bet || 0).toFixed(0)}`;
+    ui.bankroll.textContent = `$${state.bankroll.toFixed(0)}`;
+    ui.bet.textContent = `$${state.baseBet.toFixed(0)}`;
     ui.shoeInfo.textContent = `${(state.shoe.length / 52).toFixed(2)} decks`;
     ui.countInfo.textContent = state.phase === 'roundOver' ? countDisplay() : 'Shown after round';
     ui.statusText.textContent = state.message;
@@ -1800,8 +1786,8 @@
     ui.newRoundBtn.disabled = state.phase !== 'roundOver';
   }
 
-  function getBotCenters(countOverride = null){
-    const count = Math.max(1, Number(countOverride) || state.bots.length || state.botConfig.count || 1);
+  function getBotCenters(){
+    const count = Math.max(1, state.bots.length || state.botConfig.count || 1);
     if(isPhone()){
       const { topY, bottomY } = getMobileBotLayout();
       if(count <= 3){
@@ -1924,104 +1910,43 @@
     const total = shownCards.length ? handTotals(shownCards).total : 0;
   }
 
-  function getPerspectivePlayerInfo(){
-    if(isGuest()){
-      const botIndex = humanSeatBotIndex();
-      const bot = state.bots[botIndex];
-      if(bot){
-        return {
-          hands: bot.hands || [],
-          activeHand: bot.activeHand || 0,
-          active: state.phase === 'bots' && state.currentBot === botIndex,
-          bankroll: bot.bankroll,
-          bet: bot.hands?.[bot.activeHand || 0]?.bet || bot.bet || 0,
-          label: seatMemberName(`bot${botIndex}`) || bot.name || getPlayerName(),
-        };
-      }
-    }
-    return {
-      hands: state.hands,
-      activeHand: state.activeHand,
-      active: state.phase === 'player',
-      bankroll: state.bankroll,
-      bet: currentHand()?.bet || state.baseBet || 0,
-      label: getPlayerName(),
-    };
-  }
-
-  function getPerspectiveOpponentEntries(){
-    if(!isGuest()){
-      return state.bots.map((bot, i) => ({
-        type: 'bot',
-        hands: bot.hands || [],
-        activeHand: bot.activeHand || 0,
-        active: state.phase === 'bots' && i === state.currentBot,
-        label: bot.name,
-        roundOutcome: bot.roundOutcome || '',
-      }));
-    }
-    const entries = [];
-    entries.push({
-      type: 'host-player',
-      hands: state.hands || [],
-      activeHand: state.activeHand || 0,
-      active: state.phase === 'player',
-      label: seatMemberName('player') || 'Host',
-      roundOutcome: '',
-    });
-    const localBotIndex = humanSeatBotIndex();
-    state.bots.forEach((bot, i) => {
-      if(i === localBotIndex) return;
-      entries.push({
-        type: 'bot',
-        hands: bot.hands || [],
-        activeHand: bot.activeHand || 0,
-        active: state.phase === 'bots' && i === state.currentBot,
-        label: bot.name,
-        roundOutcome: bot.roundOutcome || '',
-      });
-    });
-    return entries;
-  }
-
   function drawBotAreas(){
-    const entries = getPerspectiveOpponentEntries();
-    const centers = getBotCenters(entries.length);
-    entries.forEach((entry, i) => {
+    const centers = getBotCenters();
+    state.bots.forEach((bot, i) => {
       const seat = centers[i];
-      if(!seat) return;
-      const shifts = entry.hands.length === 1 ? [0] : [-68, 68];
-      entry.hands.forEach((hand, handIndex) => {
+      const activeBot = state.phase === 'bots' && i === state.currentBot;
+      const shifts = bot.hands.length === 1 ? [0] : [-68, 68];
+      bot.hands.forEach((hand, handIndex) => {
         const centerX = seat.x + (shifts[handIndex] || 0);
-        const active = entry.active && entry.activeHand === handIndex && !hand.done;
+        const active = activeBot && bot.activeHand === handIndex && !hand.done;
         if(active){
           ctx.save();
           ctx.strokeStyle = 'rgba(122,224,255,.75)'; ctx.lineWidth = 3;
           roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
           ctx.restore();
         }
-        drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? entry.label : `${entry.label} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        const total = hand.cards.length ? handTotals(hand.cards).total : 0;
       });
       ctx.save();
       ctx.textAlign='center';
-      if(entry.roundOutcome){
+      if(bot.roundOutcome){
         ctx.fillStyle='rgba(255,231,167,.95)';
         ctx.font = isPhone() ? '900 10px Inter, sans-serif' : '900 12px Inter, sans-serif';
-        ctx.fillText(entry.roundOutcome.toUpperCase(), seat.x, seat.y + (isPhone() ? 118 : 132));
+        ctx.fillText(bot.roundOutcome.toUpperCase(), seat.x, seat.y + (isPhone() ? 118 : 132));
       }
       ctx.restore();
     });
   }
 
   function drawPlayerAreas(){
-    const playerInfo = getPerspectivePlayerInfo();
-    const hands = playerInfo.hands || [];
-    const centers = hands.length === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
-    hands.forEach((hand, i) => {
+    const centers = state.hands.length === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
+    state.hands.forEach((hand, i) => {
       const center = centers[i] || innerWidth/2;
-      const active = playerInfo.active && i === playerInfo.activeHand && !hand.done;
+      const active = state.phase === 'player' && i === state.activeHand && !hand.done;
       const handY = getPlayerHandY();
       drawHandBlock(hand.cards, center, handY, {revealAll:true, active, hand, label:``});
+      const total = hand.cards.length ? handTotals(hand.cards).total : 0;
       if(hand.outcome){
         ctx.save();
         ctx.fillStyle = 'rgba(0,0,0,.45)';
