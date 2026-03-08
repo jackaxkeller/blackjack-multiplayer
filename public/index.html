@@ -53,13 +53,15 @@
       width:min(900px, 84vw);
       padding:24px;
       gap:20px;
-      transform:scale(.9);
+      transform:scale(.81);
       transform-origin:center center;
     }
     .rules{
-      padding:14px 16px;
+      padding:12px 14px;
       align-self:start;
       min-height:0;
+      max-height:170px;
+      overflow:hidden;
     }
     .rules h2{
       margin-bottom:8px;
@@ -797,6 +799,7 @@
       pendingState: null,
       joinedAt: Date.now(),
     },
+    cutCardReached: false,
   };
 
 
@@ -855,6 +858,16 @@
       return bot?.bet ?? bot?.hands?.[0]?.bet ?? 0;
     }
     return state.baseBet;
+  }
+  function getSeatBotByIndex(botIndex){
+    return botIndex >= 0 ? state.bots[botIndex] || null : null;
+  }
+  function remoteSeatCanBet(botIndex){
+    return state.phase === 'betting' && botIndex >= 0 && !!getSeatBotByIndex(botIndex);
+  }
+  function getRemoteAnimationScale(target, botIndex=null){
+    if(isGuest() && target === 'bot' && botIndex === humanSeatBotIndex()) return 1;
+    return target === 'bot' ? 0.7 : 1;
   }
   function isHumanControlledBot(index){
     return Object.entries(state.multiplayer.seats || {}).some(([seat, pid]) => seat === `bot${index}` && !!pid);
@@ -959,6 +972,7 @@
       roundId: state.roundId,
       runningCount: state.runningCount,
       speedLevel: state.speedLevel,
+      cutCardReached: state.cutCardReached,
       multiplayer: {
         code: state.multiplayer.code,
         hostId: state.multiplayer.hostId,
@@ -967,8 +981,48 @@
       }
     };
   }
+  function createAnimationRecord(target, handIndex, card, facedown=false, botIndex=null){
+    const cardIndex = target === 'dealer'
+      ? Math.max(0, (state.dealer.cards?.length || 0) - 1)
+      : target === 'player'
+        ? Math.max(0, (state.hands[handIndex]?.cards?.length || 0) - 1)
+        : Math.max(0, (state.bots[botIndex]?.hands?.[handIndex]?.cards?.length || 0) - 1);
+    const dest = getCardDestination(target, handIndex, cardIndex, botIndex);
+    state.animations.push({
+      x: state.deckPos.x, y: state.deckPos.y, w: 92, h: 132,
+      toX: dest.x, toY: dest.y, rot: -0.12 + Math.random()*0.24,
+      elapsed: 0, durMs: Math.max(140, animationDurationMs() * 0.78), queueGapMs: 0,
+      card, facedown, target, handIndex, botIndex, nextQueued: true, onQueueNext: null, onFinish: null
+    });
+  }
+  function queueRemoteDiffAnimations(previous, snapshot){
+    if(!isGuest() || !snapshot) return;
+    const prevDealer = previous?.dealer?.cards || [];
+    const nextDealer = snapshot.dealer?.cards || [];
+    for(let i = prevDealer.length; i < nextDealer.length; i++) createAnimationRecord('dealer', 0, nextDealer[i], snapshot.dealer?.hideHole && i === 1, null);
+    const prevHands = previous?.hands || [];
+    const nextHands = snapshot.hands || [];
+    for(let h = 0; h < nextHands.length; h++){
+      const prev = prevHands[h]?.cards || [];
+      const next = nextHands[h]?.cards || [];
+      for(let i = prev.length; i < next.length; i++) createAnimationRecord('player', h, next[i], false, null);
+    }
+    const prevBots = previous?.bots || [];
+    const nextBots = snapshot.bots || [];
+    for(let b = 0; b < nextBots.length; b++){
+      const prevBotHands = prevBots[b]?.hands || [];
+      const nextBotHands = nextBots[b]?.hands || [];
+      for(let h = 0; h < nextBotHands.length; h++){
+        const prev = prevBotHands[h]?.cards || [];
+        const next = nextBotHands[h]?.cards || [];
+        for(let i = prev.length; i < next.length; i++) createAnimationRecord('bot', h, next[i], false, b);
+      }
+    }
+  }
+
   function applyRemoteState(snapshot){
     if(!snapshot) return;
+    const previous = { dealer: state.dealer, hands: state.hands, bots: state.bots };
     state.started = snapshot.started;
     state.sound = snapshot.sound;
     state.startingBankroll = snapshot.startingBankroll;
@@ -989,6 +1043,7 @@
     state.roundId = snapshot.roundId;
     state.runningCount = snapshot.runningCount;
     state.speedLevel = snapshot.speedLevel;
+    state.cutCardReached = !!snapshot.cutCardReached;
     if(snapshot.multiplayer){
       state.multiplayer.code = snapshot.multiplayer.code || state.multiplayer.code;
       state.multiplayer.hostId = snapshot.multiplayer.hostId || state.multiplayer.hostId;
@@ -1007,6 +1062,7 @@
       if(state.started) ui.menu.classList.add('hidden');
       else ui.menu.classList.remove('hidden');
     }
+    queueRemoteDiffAnimations(previous, snapshot);
     updateLobbyUI();
     updateUI();
     updateButtons();
@@ -1032,7 +1088,7 @@
       return {
         name: member?.name || existing?.name || BOT_NAMES[i],
         skill: existing?.skill || ui.botSkillSelect.value,
-        bankroll: existing?.bankroll ?? 1000,
+        bankroll: existing?.bankroll ?? state.startingBankroll ?? 1000,
         hands: existing?.hands || [],
         activeHand: existing?.activeHand || 0,
         roundOutcome: existing?.roundOutcome || '',
@@ -1158,16 +1214,37 @@
   function remoteSeatCanAct(botIndex){
     return state.phase === 'bots' && state.currentBot === botIndex;
   }
-  function sendGuestAction(action){
+  function sendGuestAction(action, amount=null){
     if(!isGuest()) return;
     const botIndex = humanSeatBotIndex();
     if(botIndex < 0) return;
-    postLobbyMessage({ type:'action', from: state.multiplayer.playerId, action, botIndex });
+    postLobbyMessage({ type:'action', from: state.multiplayer.playerId, action, amount, botIndex });
   }
   function handleRemoteAction(msg){
     const botIndex = Number(msg.botIndex);
     const seat = `bot${botIndex}`;
     if(state.multiplayer.seats?.[seat] !== msg.from) return;
+    if(msg.action === 'bet' && remoteSeatCanBet(botIndex)) {
+      const bot = state.bots[botIndex];
+      const amount = Number(msg.amount) || 0;
+      if(bot && amount > 0 && bot.bankroll >= amount){
+        bot.bankroll -= amount;
+        bot.bet = (bot.bet || 0) + amount;
+        state.message = `${bot.name} bet $${bot.bet}.`;
+        updateUI(); updateButtons(); broadcastState();
+      }
+      return;
+    }
+    if(msg.action === 'clearBet' && remoteSeatCanBet(botIndex)) {
+      const bot = state.bots[botIndex];
+      if(bot && bot.bet > 0){
+        bot.bankroll += bot.bet;
+        bot.bet = 0;
+        state.message = `${bot.name} cleared their bet.`;
+        updateUI(); updateButtons(); broadcastState();
+      }
+      return;
+    }
     if(!remoteSeatCanAct(botIndex)) return;
     executeHumanBotAction(botIndex, msg.action);
   }
@@ -1279,6 +1356,7 @@
 
   function shuffleShoe(){
     state.shoe = [];
+    state.cutCardReached = false;
     for(let d=0; d<DECKS; d++){
       for(const suit of SUITS){
         for(const rank of RANKS){
@@ -1302,9 +1380,13 @@
   }
 
   function drawCard(){
-    if(state.shoe.length < 52) shuffleShoe();
+    if(state.shoe.length <= 52) shuffleShoe();
     const card = state.shoe.pop();
     state.runningCount += hiLoValue(card);
+    if(state.shoe.length <= 52){
+      state.runningCount = 0;
+      state.cutCardReached = true;
+    }
     return card;
   }
 
@@ -1442,9 +1524,18 @@
     state.phase = 'animating';
     state.message = 'Dealing...';
     state.hands = [newHand(state.baseBet)];
-    state.bots.forEach(bot => {
-      const bet = botBetSize(bot);
-      bot.bankroll -= bet;
+    state.bots.forEach((bot, i) => {
+      let bet = bot.bet || 0;
+      if(isHumanControlledBot(i)) {
+        if(bet < MIN_BET) bet = Math.max(MIN_BET, Math.min(bot.bankroll, botBetSize(bot)));
+        if(bot.bet !== bet){
+          if(bot.bet > 0) bot.bankroll += bot.bet;
+          bot.bankroll -= bet;
+        }
+      } else {
+        bet = botBetSize(bot);
+        bot.bankroll -= bet;
+      }
       bot.bet = bet;
       bot.hands = [newHand(bet)];
       bot.activeHand = 0;
@@ -1507,6 +1598,7 @@
           state.bots[item.botIndex].hands[item.handIndex].cards.push(item.card);
         }
         sfx.card();
+        broadcastState();
         if(typeof anim.chainComplete === 'function') anim.chainComplete();
       }
     };
@@ -1836,14 +1928,19 @@
       const bot = state.bots[botIndex];
       const guestHand = bot?.hands?.[bot?.activeHand || 0];
       const guestTurn = botIndex >= 0 && state.phase === 'bots' && state.currentBot === botIndex && guestHand && !guestHand.done;
+      const canGuestBet = botIndex >= 0 && state.phase === 'betting';
       ui.dealBtn.disabled = true;
       ui.hitBtn.disabled = !guestTurn;
       ui.standBtn.disabled = !guestTurn;
       ui.doubleBtn.disabled = !(guestTurn && canDoubleBot(bot, guestHand));
       ui.splitBtn.disabled = !(guestTurn && canSplitBot(bot, guestHand));
       ui.surrenderBtn.disabled = !(guestTurn && canSurrenderBot(bot, guestHand));
-      ui.clearBtn.disabled = true;
+      ui.clearBtn.disabled = !(canGuestBet && (bot?.bet || 0) > 0);
       ui.newRoundBtn.disabled = true;
+      document.querySelectorAll('[data-chip]').forEach(btn => {
+        const amount = Number(btn.dataset.chip) || 0;
+        btn.disabled = !(canGuestBet && (bot?.bankroll || 0) >= amount);
+      });
       return;
     }
     ui.dealBtn.disabled = !(state.phase === 'betting' && state.baseBet >= MIN_BET);
@@ -1854,6 +1951,7 @@
     ui.surrenderBtn.disabled = !(state.phase === 'player' && hand && canSurrenderPlayer(hand));
     ui.clearBtn.disabled = !(state.phase === 'betting' && state.baseBet > 0);
     ui.newRoundBtn.disabled = state.phase !== 'roundOver';
+    document.querySelectorAll('[data-chip]').forEach(btn => btn.disabled = !(state.phase === 'betting' && state.bankroll >= (Number(btn.dataset.chip) || 0)));
   }
 
   function getBotCenters(){
@@ -1890,6 +1988,7 @@
   }
 
   function getCardDestination(target, handIndex, cardIndex, botIndex=null){
+    if(isGuest() && target === 'bot' && botIndex === humanSeatBotIndex()) return getCardDestination('player', handIndex, cardIndex, null);
     const phoneScale = isPhone() ? 0.82 : 1;
     const cardW = 92 * phoneScale, gap = 28 * phoneScale;
     if(target === 'dealer'){
@@ -2158,7 +2257,7 @@
       const eased = 1 - Math.pow(1-p,3);
       const x = a.x + (a.toX - a.x) * eased;
       const y = a.y + (a.toY - a.y) * eased - Math.sin(p*Math.PI)*26;
-      const scale = a.target === 'bot' ? 0.7 : 1;
+      const scale = getRemoteAnimationScale(a.target, a.botIndex);
       drawCardGraphic(x, y, a.card, a.facedown, a.rot*(1-eased), scale);
       if(p >= 1) finished.push(a);
       else remaining.push(a);
@@ -2468,9 +2567,9 @@
     ui.doubleBtn.onclick = () => isGuest() ? sendGuestAction('double') : doubleDown();
     ui.splitBtn.onclick = () => isGuest() ? sendGuestAction('split') : split();
     ui.surrenderBtn.onclick = () => isGuest() ? sendGuestAction('surrender') : surrender();
-    ui.clearBtn.onclick = () => { if(!isGuest()) clearBet(); };
+    ui.clearBtn.onclick = () => { if(isGuest()) sendGuestAction('clearBet'); else clearBet(); };
     ui.newRoundBtn.onclick = () => { if(!isGuest()) nextRound(); };
-    document.querySelectorAll('[data-chip]').forEach(btn => btn.onclick = () => { if(!isGuest()) placeBet(Number(btn.dataset.chip)); });
+    document.querySelectorAll('[data-chip]').forEach(btn => btn.onclick = () => { const amount = Number(btn.dataset.chip); if(isGuest()) sendGuestAction('bet', amount); else placeBet(amount); });
     addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase();
       if(k==='d') { if(!isGuest()){ startGame(); beginDeal(); } }
@@ -2479,9 +2578,9 @@
       else if(k==='x') { isGuest() ? sendGuestAction('double') : doubleDown(); }
       else if(k==='p') { isGuest() ? sendGuestAction('split') : split(); }
       else if(k==='r') { isGuest() ? sendGuestAction('surrender') : surrender(); }
-      else if(k==='c') { if(!isGuest()) clearBet(); }
+      else if(k==='c') { isGuest() ? sendGuestAction('clearBet') : clearBet(); }
       else if(k==='n') { if(!isGuest()) nextRound(); }
-      else if(['1','2','3','4'].includes(k)) { if(!isGuest()) [5,25,100,500][Number(k)-1] && placeBet([5,25,100,500][Number(k)-1]); }
+      else if(['1','2','3','4'].includes(k)) { const amount = [5,25,100,500][Number(k)-1]; if(amount) isGuest() ? sendGuestAction('bet', amount) : placeBet(amount); }
     });
   }
 
