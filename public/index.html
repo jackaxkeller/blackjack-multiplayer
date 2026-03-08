@@ -809,6 +809,7 @@
       joinedAt: Date.now(),
     },
     cutCardReached: false,
+    remoteHiddenCardCounts: {},
   };
 
 
@@ -864,7 +865,7 @@
   function getPerspectiveBaseBet(){
     if(isGuest()){
       const bot = getPerspectiveBot();
-      return bot?.bet ?? bot?.hands?.[0]?.bet ?? 0;
+      return bot?.bet ?? 0;
     }
     return state.baseBet;
   }
@@ -877,6 +878,52 @@
   function getRemoteAnimationScale(target, botIndex=null){
     if(isGuest() && target === 'bot' && botIndex === humanSeatBotIndex()) return 1;
     return target === 'bot' ? 0.7 : 1;
+  }
+
+  function cardRevealKey(target, handIndex=0, botIndex=null){
+    return target === 'bot' ? `bot:${botIndex}:${handIndex}` : `${target}:${handIndex}`;
+  }
+  function getHiddenCardCount(target, handIndex=0, botIndex=null){
+    if(!isGuest()) return 0;
+    return state.remoteHiddenCardCounts[cardRevealKey(target, handIndex, botIndex)] || 0;
+  }
+  function addHiddenCard(target, handIndex=0, botIndex=null){
+    const key = cardRevealKey(target, handIndex, botIndex);
+    state.remoteHiddenCardCounts[key] = (state.remoteHiddenCardCounts[key] || 0) + 1;
+  }
+  function revealHiddenCard(target, handIndex=0, botIndex=null){
+    const key = cardRevealKey(target, handIndex, botIndex);
+    if(!state.remoteHiddenCardCounts[key]) return;
+    state.remoteHiddenCardCounts[key]--;
+    if(state.remoteHiddenCardCounts[key] <= 0) delete state.remoteHiddenCardCounts[key];
+  }
+  function resetRemoteHiddenCards(){
+    state.remoteHiddenCardCounts = {};
+  }
+  function sanitizeRemoteHiddenCards(){
+    if(!isGuest()) return;
+    for(const [key, hidden] of Object.entries(state.remoteHiddenCardCounts)){
+      let total = 0;
+      if(key.startsWith('dealer:')) total = state.dealer.cards?.length || 0;
+      else if(key.startsWith('player:')){
+        const handIndex = Number(key.split(':')[1] || 0);
+        total = state.hands[handIndex]?.cards?.length || 0;
+      } else if(key.startsWith('bot:')){
+        const [, botIndexRaw, handIndexRaw] = key.split(':');
+        total = state.bots[Number(botIndexRaw)]?.hands?.[Number(handIndexRaw)]?.cards?.length || 0;
+      }
+      if(hidden <= 0 || total <= 0) delete state.remoteHiddenCardCounts[key];
+      else if(hidden >= total) state.remoteHiddenCardCounts[key] = Math.max(0, total - 1);
+    }
+  }
+  function getRenderedCards(target, handIndex=0, botIndex=null){
+    const cards = target === 'dealer'
+      ? (state.dealer.cards || [])
+      : target === 'player'
+        ? (state.hands[handIndex]?.cards || [])
+        : (state.bots[botIndex]?.hands?.[handIndex]?.cards || []);
+    const hidden = getHiddenCardCount(target, handIndex, botIndex);
+    return hidden > 0 ? cards.slice(0, Math.max(0, cards.length - hidden)) : cards;
   }
   function isHumanControlledBot(index){
     return Object.entries(state.multiplayer.seats || {}).some(([seat, pid]) => seat === `bot${index}` && !!pid);
@@ -1019,20 +1066,27 @@
       x: state.deckPos.x, y: state.deckPos.y, w: 92, h: 132,
       toX: dest.x, toY: dest.y, rot: -0.12 + Math.random()*0.24,
       elapsed: 0, durMs: Math.max(140, animationDurationMs() * 0.78), queueGapMs: 0,
-      card, facedown, target, handIndex, botIndex, nextQueued: true, onQueueNext: null, onFinish: null
+      card, facedown, target, handIndex, botIndex, nextQueued: true, onQueueNext: null,
+      onFinish: () => revealHiddenCard(target, handIndex, botIndex)
     });
   }
   function queueRemoteDiffAnimations(previous, snapshot){
     if(!isGuest() || !snapshot) return;
     const prevDealer = previous?.dealer?.cards || [];
     const nextDealer = snapshot.dealer?.cards || [];
-    for(let i = prevDealer.length; i < nextDealer.length; i++) createAnimationRecord('dealer', 0, nextDealer[i], snapshot.dealer?.hideHole && i === 1, null);
+    for(let i = prevDealer.length; i < nextDealer.length; i++){
+      addHiddenCard('dealer', 0, null);
+      createAnimationRecord('dealer', 0, nextDealer[i], snapshot.dealer?.hideHole && i === 1, null);
+    }
     const prevHands = previous?.hands || [];
     const nextHands = snapshot.hands || [];
     for(let h = 0; h < nextHands.length; h++){
       const prev = prevHands[h]?.cards || [];
       const next = nextHands[h]?.cards || [];
-      for(let i = prev.length; i < next.length; i++) createAnimationRecord('player', h, next[i], false, null);
+      for(let i = prev.length; i < next.length; i++){
+        addHiddenCard('player', h, null);
+        createAnimationRecord('player', h, next[i], false, null);
+      }
     }
     const prevBots = previous?.bots || [];
     const nextBots = snapshot.bots || [];
@@ -1042,13 +1096,17 @@
       for(let h = 0; h < nextBotHands.length; h++){
         const prev = prevBotHands[h]?.cards || [];
         const next = nextBotHands[h]?.cards || [];
-        for(let i = prev.length; i < next.length; i++) createAnimationRecord('bot', h, next[i], false, b);
+        for(let i = prev.length; i < next.length; i++){
+          addHiddenCard('bot', h, b);
+          createAnimationRecord('bot', h, next[i], false, b);
+        }
       }
     }
   }
 
   function applyRemoteState(snapshot){
     if(!snapshot) return;
+    const previousRoundId = state.roundId;
     const previous = { dealer: state.dealer, hands: state.hands, bots: state.bots };
     state.started = snapshot.started;
     state.sound = snapshot.sound;
@@ -1071,6 +1129,7 @@
     state.runningCount = snapshot.runningCount;
     state.speedLevel = snapshot.speedLevel;
     state.cutCardReached = !!snapshot.cutCardReached;
+    if(snapshot.roundId !== previousRoundId || !snapshot.started) resetRemoteHiddenCards();
     if(snapshot.multiplayer){
       state.multiplayer.code = snapshot.multiplayer.code || state.multiplayer.code;
       state.multiplayer.hostId = snapshot.multiplayer.hostId || state.multiplayer.hostId;
@@ -1090,6 +1149,7 @@
       else ui.menu.classList.remove('hidden');
     }
     queueRemoteDiffAnimations(previous, snapshot);
+    sanitizeRemoteHiddenCards();
     updateLobbyUI();
     updateUI();
     updateButtons();
@@ -1449,6 +1509,7 @@
     state.dealingQueue = [];
     state.animations = [];
     state.particles = [];
+    resetRemoteHiddenCards();
     state.bots.forEach(bot => { bot.hands = []; bot.activeHand = 0; bot.roundOutcome = ''; });
   }
 
@@ -1675,6 +1736,7 @@
       state.message = appendRoundCountToMessage('Dealer has blackjack.');
       state.phase = 'roundOver';
       state.baseBet = 0;
+      state.bots.forEach(bot => { bot.bet = 0; });
       sfx.lose();
       updateRoundOutcomeLabels();
       return;
@@ -1927,6 +1989,7 @@
     else if(losses && !wins && !pushes){ state.message = appendRoundCountToMessage('Dealer sweeps your corner.'); sfx.lose(); }
     else { state.message = appendRoundCountToMessage('Mixed results.'); sfx.push(); }
     state.baseBet = 0;
+    state.bots.forEach(bot => { bot.bet = 0; });
     updateRoundOutcomeLabels();
     updateUI(); updateButtons();
     broadcastState();
@@ -1936,6 +1999,7 @@
     if(state.phase !== 'roundOver') return;
     resetTableForRound();
     state.phase = 'betting';
+    state.bots.forEach(bot => { bot.bet = 0; });
     state.message = state.bankroll > 0 ? 'Place a bet to begin.' : 'Bankroll empty. Refresh for a fresh stack.';
     updateUI(); updateButtons();
     broadcastState();
@@ -2184,8 +2248,9 @@
   function drawDealerArea(){
     const reveal = !state.dealer.hideHole;
     const y = isPhone() ? 134 : 134;
-    drawHandBlock(state.dealer.cards, innerWidth/2, y, {revealAll:reveal, label:'Dealer'});
-    const shownCards = reveal ? state.dealer.cards : [state.dealer.cards[0]].filter(Boolean);
+    const dealerCards = getRenderedCards('dealer', 0, null);
+    drawHandBlock(dealerCards, innerWidth/2, y, {revealAll:reveal, label:'Dealer'});
+    const shownCards = reveal ? dealerCards : [dealerCards[0]].filter(Boolean);
     const total = shownCards.length ? handTotals(shownCards).total : 0;
   }
 
@@ -2208,7 +2273,7 @@
           ctx.restore();
         }
         const hostName = assignedNameForSeat('player', 'Host');
-        drawHandBlock(hand.cards, centerX, hostSeat.y, {revealAll:true, active, hand, label:handIndex === 0 ? hostName : `${hostName} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        drawHandBlock(getRenderedCards('player', handIndex, null), centerX, hostSeat.y, {revealAll:true, active, hand, label:handIndex === 0 ? hostName : `${hostName} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
       });
       state.bots.forEach((bot, i) => {
         if(i === humanSeatBotIndex()) return;
@@ -2224,7 +2289,7 @@
             roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
             ctx.restore();
           }
-          drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+          drawHandBlock(getRenderedCards('bot', handIndex, i), centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
         });
         ctx.save();
         ctx.textAlign='center';
@@ -2251,7 +2316,7 @@
           roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
           ctx.restore();
         }
-        drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        drawHandBlock(getRenderedCards('bot', handIndex, i), centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
       });
       ctx.save();
       ctx.textAlign='center';
@@ -2278,7 +2343,7 @@
       const label = isGuest()
         ? (i === 0 ? (state.multiplayer.playerName || perspectiveBot?.name || 'You') : `${state.multiplayer.playerName || perspectiveBot?.name || 'You'} • Split`)
         : ``;
-      drawHandBlock(hand.cards, center, handY, {revealAll:true, active, hand, label});
+      drawHandBlock(isGuest() ? getRenderedCards('bot', i, humanSeatBotIndex()) : getRenderedCards('player', i, null), center, handY, {revealAll:true, active, hand, label});
       if(hand.outcome){
         ctx.save();
         ctx.fillStyle = 'rgba(0,0,0,.45)';
