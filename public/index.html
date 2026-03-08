@@ -1,0 +1,2435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arcade Blackjack Royale</title>
+<style>
+  :root{
+    --bg:#081b13;
+    --felt:#0f5f3c;
+    --felt2:#0b4e31;
+    --gold:#f6d675;
+    --gold2:#b98a17;
+    --cream:#f6efe2;
+    --red:#cf3348;
+    --ink:#142018;
+    --panel:rgba(7,18,13,.75);
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font-family:Inter,Segoe UI,Arial,sans-serif;
+    background:
+      radial-gradient(circle at top, #114b31 0%, #07150f 65%),
+      linear-gradient(135deg,#0b2418,#040907);
+    color:var(--cream);
+    overflow:hidden;
+  }
+  .screen{position:fixed;inset:0}
+  #menu{
+    display:flex;align-items:center;justify-content:center;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(246,214,117,.16), transparent 30%),
+      linear-gradient(160deg, rgba(0,0,0,.35), rgba(0,0,0,.72));
+    z-index:50;
+    transition:opacity .45s ease, visibility .45s ease;
+  }
+  #menu.hidden{opacity:0;visibility:hidden;pointer-events:none}
+  .menu-card{
+    width:min(980px,94vw);
+    background:linear-gradient(180deg, rgba(17,34,25,.92), rgba(7,17,12,.95));
+    border:2px solid rgba(246,214,117,.45);
+    border-radius:28px;
+    box-shadow:var(--shadow), inset 0 0 0 1px rgba(255,255,255,.04);
+    padding:28px;
+    display:grid;
+    grid-template-columns:1.1fr .9fr;
+    gap:24px;
+  }
+  .title{font-size:clamp(34px,5vw,62px);font-weight:900;line-height:1;letter-spacing:.02em;margin:0}
+  .subtitle{font-size:16px;opacity:.9;margin:12px 0 24px;max-width:56ch}
+  .shine{background:linear-gradient(180deg,#fff7d8,#e8b840 60%,#a06f06);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 2px 18px rgba(246,214,117,.15)}
+  .cta-row{display:flex;gap:12px;flex-wrap:wrap}
+  button{
+    touch-action:manipulation;
+    border:0;border-radius:999px;padding:12px 18px;font-weight:800;cursor:pointer;
+    transition:transform .12s ease, filter .2s ease, opacity .2s ease;
+  }
+  button:hover{transform:translateY(-1px)}
+  button:active{transform:translateY(1px) scale(.99)}
+  .primary{background:linear-gradient(180deg,#f8df8a,#d79d21);color:#251600;box-shadow:0 8px 18px rgba(215,157,33,.28)}
+  .secondary{background:rgba(255,255,255,.08);color:var(--cream);border:1px solid rgba(255,255,255,.14)}
+  .rules{
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:22px;padding:20px;
+  }
+  .rules h2,.menu-left h2{margin:0 0 10px}
+  .rules ul{margin:0;padding-left:18px;display:grid;gap:8px}
+  .tag{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(246,214,117,.12);color:#ffe6a8;border:1px solid rgba(246,214,117,.25);font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+  #game{display:block;pointer-events:none}
+  .config-card{
+    margin:18px 0 12px;padding:16px 18px;border-radius:20px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);
+  }
+  .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .config-item label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.09em;opacity:.8;margin-bottom:8px}
+  .config-note{font-size:13px;opacity:.85;margin-top:10px;line-height:1.4}
+  .range-row{display:flex;align-items:center;gap:12px}
+  input[type="range"]{width:100%}
+  select{
+    width:100%;padding:11px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.14);
+    background:rgba(12,20,16,.95);color:var(--cream);font-weight:700;
+  }
+  .range-value{min-width:72px;text-align:center;font-weight:900;padding:10px 12px;border-radius:999px;background:rgba(246,214,117,.12);border:1px solid rgba(246,214,117,.2);color:#ffe6a8}
+
+  .hud{
+    position:fixed;left:0;right:0;top:0;z-index:10;
+    display:flex;justify-content:space-between;align-items:flex-start;
+    padding:16px 18px;gap:14px;pointer-events:none;
+  }
+  .panel{
+    background:var(--panel);
+    backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:20px;padding:12px 14px;box-shadow:var(--shadow);
+    pointer-events:auto;
+  }
+  .stack{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .stat{min-width:110px}
+  .label{font-size:11px;opacity:.74;text-transform:uppercase;letter-spacing:.1em}
+  .value{font-weight:900;font-size:24px}
+  .small{font-size:13px;opacity:.92}
+  .controls{
+    position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:15;
+    display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:min(1100px,96vw)
+  }
+  .action{background:linear-gradient(180deg,#fff,#d7e0d7);color:#112117;min-width:110px}
+  .action.accent{background:linear-gradient(180deg,#ffe7a7,#d9a023);color:#2b1900}
+  .action.warn{background:linear-gradient(180deg,#ffd0d6,#c43b51);color:#fff}
+  .action:disabled{opacity:.42;cursor:not-allowed;transform:none}
+
+  .chips{
+    position:fixed;right:18px;bottom:92px;z-index:16;display:flex;flex-direction:column;gap:10px;align-items:flex-end
+  }
+  .chip-row{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;max-width:360px}
+  .chip{
+    touch-action:manipulation;
+    width:62px;height:62px;border-radius:50%;position:relative;display:grid;place-items:center;
+    font-weight:900;color:white;text-shadow:0 1px 3px rgba(0,0,0,.35);
+    box-shadow:0 10px 18px rgba(0,0,0,.28), inset 0 0 0 4px rgba(255,255,255,.92), inset 0 0 0 10px rgba(255,255,255,.12);
+    border:0;cursor:pointer;
+  }
+  .chip::before{content:"";position:absolute;inset:7px;border-radius:50%;border:2px dashed rgba(255,255,255,.55)}
+  .c5{background:radial-gradient(circle at 30% 30%,#ff8190,#c11c39)}
+  .c25{background:radial-gradient(circle at 30% 30%,#6ad7ff,#145dc1)}
+  .c100{background:radial-gradient(circle at 30% 30%,#91ff88,#26962a)}
+  .c500{background:radial-gradient(circle at 30% 30%,#ffe08b,#cf7b00)}
+  .chip:hover{transform:translateY(-2px) scale(1.03)}
+
+  .toast{
+    position:fixed;left:50%;top:88px;transform:translateX(-50%);
+    z-index:30;background:rgba(0,0,0,.62);border:1px solid rgba(255,255,255,.08);
+    padding:14px 22px;border-radius:999px;font-size:22px;font-weight:900;letter-spacing:.05em;
+    opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(8px)}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:13px;opacity:.9}
+  .pill{padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.07)}
+
+  @media (max-width: 860px){
+    .menu-card{grid-template-columns:1fr}
+    .hud{flex-direction:column}
+    .chips{right:10px;bottom:146px}
+    .config-grid{grid-template-columns:1fr}
+  }
+
+  input, select, button { font: inherit; }
+  @media (max-width: 900px){
+    #menu{
+      align-items:flex-start;
+      overflow:auto;
+      padding: max(14px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
+    }
+    .menu-card{
+      width:min(100%, 760px);
+      margin: 8px auto 18px;
+      border-radius:20px;
+      padding:16px;
+    }
+    .config-grid{
+      grid-template-columns:1fr;
+      gap:12px;
+    }
+    .cta-row{
+      flex-wrap:wrap;
+      gap:10px;
+    }
+    .cta-row button,
+    .panel button,
+    .chip,
+    .action-btn,
+    button{
+    touch-action:manipulation;
+      min-height:44px;
+    }
+    .panel{
+      min-width:0;
+    }
+    .legend{
+      gap:8px;
+    }
+    .pill{
+      padding:8px 10px;
+    }
+  }
+  
+
+
+  @media (max-width: 640px){
+    body{
+      overflow:auto;
+    }
+    #menu{
+      align-items:flex-start;
+      overflow:auto;
+      padding:max(12px, env(safe-area-inset-top)) 10px max(16px, env(safe-area-inset-bottom));
+    }
+    .menu-card{
+      width:min(100%, 720px);
+      margin:0 auto 16px;
+      padding:16px;
+      border-radius:18px;
+    }
+    .config-grid{
+      grid-template-columns:1fr !important;
+      gap:12px !important;
+    }
+    .range-row{
+      flex-direction:column;
+      align-items:stretch;
+      gap:8px;
+    }
+    .range-row input[type="range"],
+    .config-item input,
+    .config-item select{
+      width:100%;
+      box-sizing:border-box;
+    }
+
+    #hud{
+      left:10px !important;
+      right:10px !important;
+      top:max(10px, env(safe-area-inset-top)) !important;
+      width:auto !important;
+      display:grid !important;
+      grid-template-columns:1fr !important;
+      gap:8px !important;
+      z-index:30 !important;
+      pointer-events:none;
+    }
+    #hud .panel{
+      width:auto !important;
+      min-width:0 !important;
+      padding:10px !important;
+      border-radius:14px !important;
+      overflow:visible !important;
+    }
+    #hud .panel button{
+      pointer-events:auto;
+      width:100%;
+      min-height:44px;
+    }
+
+    #controls{
+      position:fixed !important;
+      left:10px !important;
+      right:10px !important;
+      bottom:116px !important;
+      transform:none !important;
+      width:auto !important;
+      max-width:none !important;
+      display:grid !important;
+      grid-template-columns:repeat(4, minmax(0,1fr)) !important;
+      grid-auto-rows:minmax(44px, auto);
+      gap:8px !important;
+      z-index:22 !important;
+    }
+    #controls .action{
+      min-width:0 !important;
+      width:100% !important;
+      padding:10px 6px !important;
+      font-size:13px !important;
+      line-height:1.15 !important;
+      min-height:44px !important;
+      white-space:normal !important;
+    }
+
+    #chips{
+      position:fixed !important;
+      left:10px !important;
+      right:10px !important;
+      bottom:max(10px, env(safe-area-inset-bottom)) !important;
+      width:auto !important;
+      display:block !important;
+      z-index:21 !important;
+      align-items:stretch !important;
+    }
+    #chips .panel{
+      width:auto !important;
+      min-width:0 !important;
+      padding:10px !important;
+      border-radius:14px !important;
+    }
+    #chips .chip-row{
+      display:grid !important;
+      grid-template-columns:repeat(4, minmax(0,1fr)) !important;
+      gap:8px !important;
+      max-width:none !important;
+      justify-content:stretch !important;
+    }
+    #chips .chip{
+      width:100% !important;
+      min-width:0 !important;
+      min-height:46px !important;
+      height:46px !important;
+      font-size:14px !important;
+    }
+
+    .legend{
+      gap:8px;
+    }
+    .pill{
+      padding:8px 10px;
+    }
+  }
+
+
+  /* Layout polish: keep HUD away from dealer area */
+  .hud{
+    position:fixed;
+    top:18px;
+    left:18px;
+    right:18px;
+    display:block;
+    z-index:18;
+    pointer-events:none;
+  }
+  #statsPanel{
+    position:fixed;
+    top:18px;
+    right:18px;
+    width:220px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    pointer-events:none;
+  }
+  #statsPanel .stat{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:2px;
+  }
+  #statusPanel{
+    position:fixed;
+    top:18px;
+    left:18px;
+    width:fit-content;
+    max-width:min(420px, calc(100vw - 280px));
+    pointer-events:none;
+    display:inline-block;
+    padding-right:0 !important;
+  }
+  #statusPanel button{
+    pointer-events:auto;
+  }
+
+  @media (max-width: 640px){
+    #statsPanel{
+      top:66% !important;
+      transform:translateY(-50%) !important;
+      right:10px !important;
+      left:auto !important;
+      width:170px !important;
+      gap:8px !important;
+    }
+    #statsPanel .value{
+      font-size:14px !important;
+    }
+    #statsPanel .small{
+      font-size:11px !important;
+    }
+    #statusPanel{
+      top:max(10px, env(safe-area-inset-top)) !important;
+      left:10px !important;
+      right:auto !important;
+      width:fit-content !important;
+      max-width:calc(100vw - 210px) !important;
+    }
+  }
+
+
+  @media (max-width: 640px){
+    #musicBtn{
+      width:60% !important;
+      min-height:26px !important;
+      padding:6px 8px !important;
+      font-size:11px !important;
+      line-height:1.1 !important;
+    }
+  }
+
+
+  #statusPanel.panel{
+    padding:10px 12px !important;
+    width:fit-content !important;
+  }
+  #statusText{
+    display:inline-block;
+    max-width:100%;
+  }
+  @media (max-width: 640px){
+    #statusPanel.panel{
+      padding:8px 10px !important;
+    }
+  }
+
+
+
+
+
+
+
+
+/* Mobile-only smaller stats panel text */
+@media (max-width:640px){
+  #statsPanel .label{
+    font-size: 10px !important;
+  }
+  #statsPanel .value{
+    font-size: 12px !important;
+  }
+  #statsPanel .small{
+    font-size: 9px !important;
+  }
+}
+
+
+/* Mobile-only compact stats panel */
+@media (max-width:640px){
+  #statsPanel{
+    top:10% !important;
+    right:8px !important;
+    left:auto !important;
+    width:fit-content !important;
+    max-width:126px !important;
+    gap:3px !important;
+    transform:translateY(-50%) !important;
+    transform-origin:right center !important;
+  }
+  #statsPanel.panel{
+    padding:6px 7px !important;
+  }
+  #statsPanel .stat{
+    gap:1px !important;
+    align-items:flex-start !important;
+  }
+  #statsPanel .label{
+    font-size:8px !important;
+    line-height:1.05 !important;
+    white-space:nowrap !important;
+  }
+  #statsPanel .value{
+    font-size:10px !important;
+    line-height:1.05 !important;
+    white-space:nowrap !important;
+  }
+  #statsPanel .small{
+    font-size:7px !important;
+    line-height:1.05 !important;
+    white-space:nowrap !important;
+  }
+}
+
+
+
+  .lobby-card{
+    margin:14px 0 0;
+    padding:18px 20px;
+    border-radius:20px;
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.08);
+    width:calc(100% + clamp(220px, 28vw, 360px));
+    margin-right:calc(-1 * clamp(220px, 28vw, 360px));
+    position:relative;
+    z-index:1;
+  }
+  .lobby-grid{display:grid;grid-template-columns:minmax(0,1.2fr) auto;gap:16px;align-items:end}
+  .lobby-stack{display:grid;gap:12px}
+  .text-input{
+    width:100%;
+    min-height:60px;
+    padding:16px 18px;
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(12,20,16,.95);
+    color:var(--cream);
+    font-weight:700;
+    font-size:18px;
+  }
+  .lobby-row{display:flex;gap:10px;flex-wrap:wrap}
+  .lobby-note{font-size:12px;opacity:.82;line-height:1.45}
+  .lobby-status{margin-top:10px;font-size:13px;color:#ffe6a8;min-height:18px}
+  .lobby-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(122,224,255,.12);border:1px solid rgba(122,224,255,.24);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#c9f6ff}
+  .lobby-code{font-size:18px;letter-spacing:.22em;color:#fff}
+
+  @media (min-width: 921px){
+    .menu-card{
+      transform:scale(.9);
+      transform-origin:center center;
+    }
+    .rules{
+      align-self:start;
+      padding:14px 16px;
+    }
+    .rules ul{
+      grid-template-columns:1fr 1fr;
+      gap:6px 18px;
+      font-size:14px;
+    }
+  }
+
+
+  @media (max-width: 920px){
+    .menu-card{
+      width:min(98vw, 760px);
+      grid-template-columns:1fr;
+    }
+    .rules ul{
+      grid-template-columns:1fr;
+    }
+    .lobby-card{
+      width:100%;
+      margin-right:0;
+    }
+    .lobby-grid{
+      grid-template-columns:1fr;
+      align-items:stretch;
+    }
+  }
+
+</style>
+</head>
+<body>
+<div id="menu" class="screen">
+  <div class="menu-card">
+    <div class="menu-left">
+      <div class="tag">Single-file browser game</div>
+      <h1 class="title shine">Arcade Blackjack Royale</h1>
+      <p class="subtitle">A neon-felt blackjack table with animated dealing, casino-style options, generated sound effects, bot opponents, and a speed dial that can turn the table from smoky slow-burn to lightning felt.</p>
+      <div class="config-card">
+        <h2>Bot Table Setup</h2>
+        <div class="config-grid">
+          <div class="config-item">
+            <label for="botCountSlider">Other Bots at the Table</label>
+            <div class="range-row">
+              <input id="botCountSlider" type="range" min="1" max="3" step="1" value="1" />
+              <div class="range-value" id="botCountValue">1 bot</div>
+            </div>
+          </div>
+          <div class="config-item">
+            <label for="botSkillSelect">Bot Skill Level</label>
+            <select id="botSkillSelect">
+              <option value="easy">Easy</option>
+              <option value="medium" selected>Medium</option>
+              <option value="hard">Hard</option>
+              <option value="expert">Expert</option>
+            </select>
+          </div>
+          <div class="config-item">
+            <label for="bankrollInput">Starting Bankroll</label>
+            <input id="bankrollInput" type="number" min="1" step="1" value="1000" style="width:140px;padding:4px;">
+          </div>
+
+          <div class="config-item">
+            <label for="dealSpeedSlider">Deal Speed</label>
+            <div class="range-row">
+              <input id="dealSpeedSlider" type="range" min="1" max="5" step="1" value="3" />
+              <div class="range-value" id="dealSpeedValue">3 • Normal</div>
+            </div>
+          </div>
+        </div>
+        <div class="config-note">Bots share the selected skill level. Expert bots follow a strong S17, six-deck, late-surrender basic strategy with doubles and one split. Easy bots are more likely to wander into the velvet fog. The deal-speed slider changes both card animation timing and bot decision tempo, from syrupy suspense to casino pinball.</div>
+      </div>
+      <div class="lobby-card">
+        <h2>Multiplayer Lobby</h2>
+        <div class="lobby-grid">
+          <div class="lobby-stack">
+            <div class="config-item">
+              <label for="playerNameInput">Player Name</label>
+              <input id="playerNameInput" class="text-input" type="text" maxlength="18" value="Player" />
+            </div>
+            <div class="config-item">
+              <label for="lobbyCodeInput">Join Existing Lobby</label>
+              <input id="lobbyCodeInput" class="text-input" type="text" maxlength="6" placeholder="Enter code" />
+            </div>
+          </div>
+          <div class="lobby-stack">
+            <div class="lobby-row">
+              <button class="primary" id="createLobbyBtn">Create Lobby</button>
+              <button class="secondary" id="joinLobbyBtn">Join Lobby</button>
+              <button class="secondary" id="leaveLobbyBtn">Leave Lobby</button>
+            </div>
+            <div>
+              <span class="lobby-badge">Lobby Code <span class="lobby-code" id="lobbyCodeDisplay">------</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="lobby-note">True online multiplayer: run the included Node/WebSocket server, open this page from that server, create a lobby, then share the generated code. Guests replace bot seats and play their own turns over the network, while the dealer always stays automated and never becomes a human-controlled seat.</div>
+        <div class="lobby-status" id="lobbyStatus">No lobby active.</div>
+      </div>
+      <div class="cta-row">
+        <button class="primary" id="startBtn">Start Game</button>
+        <button class="secondary" id="soundBtn">Sound: On</button>
+      </div>
+      <div class="legend">
+        <div class="pill">Keyboard: D deal</div>
+        <div class="pill">H hit</div>
+        <div class="pill">S stand</div>
+        <div class="pill">X double</div>
+        <div class="pill">P split</div>
+        <div class="pill">R surrender</div>
+      </div>
+    </div>
+    <div class="rules">
+      <h2>Table Rules</h2>
+      <ul>
+        <li>Six-deck shoe, dealer stands on all 17s.</li>
+        <li>Blackjack pays 3:2.</li>
+        <li>Double down allowed on any initial two cards, including after split.</li>
+        <li>Late surrender allowed before you hit, stand, double, or split.</li>
+        <li>Split identical ranks once. Split aces receive one card each and automatically stand.</li>
+        <li>Dealer peeks for blackjack. Pushes return your bet intact.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<canvas id="game" class="screen"></canvas>
+
+<div class="hud" id="hud">
+  <div class="panel stack" id="statsPanel">
+    <div class="stat"><div class="label">Bankroll</div><div class="value" id="bankroll">$1000</div></div>
+    <div class="stat"><div class="label">Current Bet</div><div class="value" id="bet">$0</div></div>
+    <div class="stat"><div class="label">Shoe</div><div class="value small" id="shoeInfo">6.00 decks</div></div>
+    <div class="stat"><div class="label">Hi-Lo Count</div><div class="value small" id="countInfo">Shown after round</div></div>
+  </div>
+  <div class="panel" id="statusPanel">
+    <div class="label">Round Status</div>
+    <div class="value small" id="statusText">Place a bet to begin.</div>
+    <div class="small" id="seatText" style="margin-top:4px;opacity:.82">Solo table</div>
+    <div style="margin-top:6px">
+      <button class="secondary" id="musicBtn" style="pointer-events:auto">Play Music: On</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast">Blackjack!</div>
+
+<div class="chips" id="chips">
+  <div class="panel">
+    <div class="label" style="margin-bottom:8px">Place Bet</div>
+    <div class="chip-row">
+      <button class="chip c5" data-chip="5">5</button>
+      <button class="chip c25" data-chip="25">25</button>
+      <button class="chip c100" data-chip="100">100</button>
+      <button class="chip c500" data-chip="500">500</button>
+    </div>
+  </div>
+</div>
+
+<div class="controls" id="controls">
+  <button class="action accent" id="dealBtn">Deal</button>
+  <button class="action" id="hitBtn">Hit</button>
+  <button class="action" id="standBtn">Stand</button>
+  <button class="action" id="doubleBtn">Double</button>
+  <button class="action" id="splitBtn">Split</button>
+  <button class="action warn" id="surrenderBtn">Surrender</button>
+  <button class="action" id="clearBtn">Clear Bet</button>
+  <button class="action" id="newRoundBtn">Next Round</button>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const ui = {
+    bankroll: document.getElementById('bankroll'),
+    bet: document.getElementById('bet'),
+    shoeInfo: document.getElementById('shoeInfo'),
+    statusText: document.getElementById('statusText'),
+    countInfo: document.getElementById('countInfo'),
+    toast: document.getElementById('toast'),
+    menu: document.getElementById('menu'),
+    startBtn: document.getElementById('startBtn'),
+    soundBtn: document.getElementById('soundBtn'),
+    musicBtn: document.getElementById('musicBtn'),
+    statsPanel: document.getElementById('statsPanel'),
+    bankrollInput: document.getElementById('bankrollInput'),
+    botCountSlider: document.getElementById('botCountSlider'),
+    botCountValue: document.getElementById('botCountValue'),
+    botSkillSelect: document.getElementById('botSkillSelect'),
+    dealSpeedSlider: document.getElementById('dealSpeedSlider'),
+    dealSpeedValue: document.getElementById('dealSpeedValue'),
+    playerNameInput: document.getElementById('playerNameInput'),
+    lobbyCodeInput: document.getElementById('lobbyCodeInput'),
+    lobbyCodeDisplay: document.getElementById('lobbyCodeDisplay'),
+    lobbyStatus: document.getElementById('lobbyStatus'),
+    createLobbyBtn: document.getElementById('createLobbyBtn'),
+    joinLobbyBtn: document.getElementById('joinLobbyBtn'),
+    leaveLobbyBtn: document.getElementById('leaveLobbyBtn'),
+    seatText: document.getElementById('seatText'),
+    dealBtn: document.getElementById('dealBtn'),
+    hitBtn: document.getElementById('hitBtn'),
+    standBtn: document.getElementById('standBtn'),
+    doubleBtn: document.getElementById('doubleBtn'),
+    splitBtn: document.getElementById('splitBtn'),
+    surrenderBtn: document.getElementById('surrenderBtn'),
+    clearBtn: document.getElementById('clearBtn'),
+    newRoundBtn: document.getElementById('newRoundBtn'),
+  };
+
+  const SUITS = ['♠','♥','♦','♣'];
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const RED_SUITS = new Set(['♥','♦']);
+  const DECKS = 6;
+  const MIN_BET = 5;
+  const BOT_NAMES = ['Mara','Knox','Vega'];
+  const SKILL_LABELS = {easy:'Easy',medium:'Medium',hard:'Hard',expert:'Expert'};
+  const SPEED_LABELS = {1:'Very Slow',2:'Slow',3:'Normal',4:'Fast',5:'Turbo'};
+  const isPhone = () => window.innerWidth <= 640;
+  function getPlayerHandY(){
+    return isPhone() ? innerHeight - 330 : innerHeight - 270;
+  }
+  function getMobileBotLayout(){
+    const dealerBottom = 116 + (132 * 0.82) + 28;
+    const playerTop = getPlayerHandY() - 40;
+    const availableTop = dealerBottom + 26;
+    const availableBottom = playerTop - 110;
+    const availableHeight = Math.max(120, availableBottom - availableTop);
+    const topY = availableTop + Math.min(28, availableHeight * 0.10);
+    const rowGap = Math.min(110, Math.max(92, availableHeight * 0.42));
+    return { topY, rowGap, bottomY: topY + rowGap, dealerBottom, playerTop };
+  }
+
+  const state = {
+    started: false,
+    sound: true,
+    startingBankroll: 1000,
+    musicOn: (() => {
+      try {
+        const saved = localStorage.getItem('blackjackMusicOn');
+        return saved === null ? true : saved === 'true';
+      } catch (e) { return true; }
+    })(),
+    bankroll: 1000,
+    baseBet: 0,
+    shoe: [],
+    discardCount: 0,
+    dealer: {cards:[], hideHole:true},
+    hands: [],
+    activeHand: 0,
+    bots: [],
+    currentBot: 0,
+    currentBotHand: 0,
+    botConfig: {count:1, skill:'medium'},
+    phase: 'betting',
+    dealingQueue: [],
+    animations: [],
+    particles: [],
+    message: 'Place a bet to begin.',
+    roundId: 0,
+    deckPos: {x:0,y:0},
+    runningCount: 0,
+    speedLevel: 3,
+    lastFrameTime: performance.now(),
+    viewWidth: window.innerWidth,
+    viewHeight: window.innerHeight,
+    multiplayer: {
+      playerId: crypto.randomUUID ? crypto.randomUUID() : `p-${Math.random().toString(36).slice(2,10)}`,
+      playerName: 'Player',
+      isHost: false,
+      joined: false,
+      code: '',
+      seat: 'player',
+      socket: null,
+      connected: false,
+      members: [],
+      seats: {},
+      hostId: '',
+      pendingState: null,
+      joinedAt: Date.now(),
+    },
+  };
+
+
+  function cleanLobbyCode(value=''){
+    return String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  }
+
+  function generateLobbyCode(){
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for(let i=0;i<6;i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    return code;
+  }
+
+  function getPlayerName(){
+    return (ui.playerNameInput?.value || 'Player').trim().slice(0,18) || 'Player';
+  }
+
+  function isMultiplayer(){ return !!state.multiplayer.joined; }
+  function isHost(){ return isMultiplayer() && state.multiplayer.isHost; }
+  function isGuest(){ return isMultiplayer() && !state.multiplayer.isHost; }
+  function seatLabel(seat){
+    if(seat === 'player') return 'Host Seat';
+    if(/^bot\d+$/.test(seat)) return `Guest Seat ${Number(seat.replace('bot','')) + 1}`;
+    return 'Spectator';
+  }
+  function humanSeatBotIndex(seat = state.multiplayer.seat){
+    if(/^bot\d+$/.test(seat)) return Number(seat.replace('bot',''));
+    return -1;
+  }
+  function isHumanControlledBot(index){
+    return Object.entries(state.multiplayer.seats || {}).some(([seat, pid]) => seat === `bot${index}` && !!pid);
+  }
+  function assignedNameForSeat(seat, fallback){
+    const pid = state.multiplayer.seats?.[seat];
+    const member = state.multiplayer.members.find(m => m.id === pid);
+    return member?.name || fallback;
+  }
+  function multiplayerStatus(text){
+    if(ui.lobbyStatus) ui.lobbyStatus.textContent = text;
+  }
+  function updateLobbyUI(){
+    ui.lobbyCodeDisplay.textContent = state.multiplayer.code || '------';
+    ui.seatText.textContent = isMultiplayer()
+      ? `${isHost() ? 'Hosting' : 'Joined'} • ${seatLabel(state.multiplayer.seat)} • ${state.multiplayer.members.length || 1} player${(state.multiplayer.members.length || 1) === 1 ? '' : 's'}`
+      : 'Solo table';
+    if(!isMultiplayer()) multiplayerStatus('No lobby active.');
+  }
+  function socketUrl(){
+    if(!location.host) return '';
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${location.host}/ws`;
+  }
+  function closeSocket(){
+    if(state.multiplayer.socket){
+      try{
+        state.multiplayer.socket.onopen = null;
+        state.multiplayer.socket.onclose = null;
+        state.multiplayer.socket.onmessage = null;
+        state.multiplayer.socket.onerror = null;
+        state.multiplayer.socket.close();
+      }catch(e){}
+    }
+    state.multiplayer.socket = null;
+    state.multiplayer.connected = false;
+  }
+  function resetLobbyState(){
+    closeSocket();
+    state.multiplayer.isHost = false;
+    state.multiplayer.joined = false;
+    state.multiplayer.code = '';
+    state.multiplayer.seat = 'player';
+    state.multiplayer.members = [];
+    state.multiplayer.seats = {};
+    state.multiplayer.hostId = '';
+    state.multiplayer.pendingState = null;
+    updateLobbyUI();
+  }
+  function ensureLobbySocket(onOpen){
+    closeSocket();
+    const url = socketUrl();
+    if(!url){
+      multiplayerStatus('This file must be opened through the included Node server, not directly from your filesystem.');
+      return null;
+    }
+    const socket = new WebSocket(url);
+    socket.onopen = () => {
+      state.multiplayer.connected = true;
+      updateLobbyUI();
+      if(typeof onOpen === 'function') onOpen(socket);
+    };
+    socket.onmessage = handleLobbyMessage;
+    socket.onclose = () => {
+      state.multiplayer.connected = false;
+      if(state.multiplayer.joined){
+        multiplayerStatus('Connection to lobby server lost.');
+      }
+      updateLobbyUI();
+    };
+    socket.onerror = () => {
+      multiplayerStatus('Could not connect to the lobby server. Start the Node server first.');
+    };
+    state.multiplayer.socket = socket;
+    return socket;
+  }
+  function postLobbyMessage(message){
+    const socket = state.multiplayer.socket;
+    if(socket && socket.readyState === WebSocket.OPEN){
+      socket.send(JSON.stringify(message));
+    }
+  }
+  function createStateSnapshot(){
+    return {
+      started: state.started,
+      sound: state.sound,
+      startingBankroll: state.startingBankroll,
+      musicOn: state.musicOn,
+      bankroll: state.bankroll,
+      baseBet: state.baseBet,
+      shoeLength: state.shoe.length,
+      discardCount: state.discardCount,
+      dealer: JSON.parse(JSON.stringify(state.dealer)),
+      hands: JSON.parse(JSON.stringify(state.hands)),
+      activeHand: state.activeHand,
+      bots: JSON.parse(JSON.stringify(state.bots)),
+      currentBot: state.currentBot,
+      currentBotHand: state.currentBotHand,
+      botConfig: JSON.parse(JSON.stringify(state.botConfig)),
+      phase: state.phase,
+      message: state.message,
+      roundId: state.roundId,
+      runningCount: state.runningCount,
+      speedLevel: state.speedLevel,
+      multiplayer: {
+        code: state.multiplayer.code,
+        hostId: state.multiplayer.hostId,
+        seats: JSON.parse(JSON.stringify(state.multiplayer.seats)),
+        members: JSON.parse(JSON.stringify(state.multiplayer.members)),
+      }
+    };
+  }
+  function applyRemoteState(snapshot){
+    if(!snapshot) return;
+    state.started = snapshot.started;
+    state.sound = snapshot.sound;
+    state.startingBankroll = snapshot.startingBankroll;
+    state.musicOn = snapshot.musicOn;
+    state.bankroll = snapshot.bankroll;
+    state.baseBet = snapshot.baseBet;
+    state.shoe = Array.from({length: snapshot.shoeLength || 0}, () => ({}));
+    state.discardCount = snapshot.discardCount;
+    state.dealer = snapshot.dealer;
+    state.hands = snapshot.hands;
+    state.activeHand = snapshot.activeHand;
+    state.bots = snapshot.bots;
+    state.currentBot = snapshot.currentBot;
+    state.currentBotHand = snapshot.currentBotHand;
+    state.botConfig = snapshot.botConfig;
+    state.phase = snapshot.phase;
+    state.message = snapshot.message;
+    state.roundId = snapshot.roundId;
+    state.runningCount = snapshot.runningCount;
+    state.speedLevel = snapshot.speedLevel;
+    if(snapshot.multiplayer){
+      state.multiplayer.code = snapshot.multiplayer.code || state.multiplayer.code;
+      state.multiplayer.hostId = snapshot.multiplayer.hostId || state.multiplayer.hostId;
+      state.multiplayer.seats = snapshot.multiplayer.seats || {};
+      state.multiplayer.members = snapshot.multiplayer.members || state.multiplayer.members;
+      const assignedSeat = Object.entries(state.multiplayer.seats).find(([, pid]) => pid === state.multiplayer.playerId)?.[0];
+      state.multiplayer.seat = assignedSeat || state.multiplayer.seat || 'spectator';
+      state.bots.forEach((bot, i) => {
+        bot.name = assignedNameForSeat(`bot${i}`, bot.name || BOT_NAMES[i] || `Bot ${i+1}`);
+      });
+    }
+    ui.dealSpeedSlider.value = String(state.speedLevel);
+    configureSpeed();
+    syncMusicButton();
+    updateLobbyUI();
+    updateUI();
+    updateButtons();
+  }
+  function broadcastState(){
+    if(!isHost()) return;
+    postLobbyMessage({ type:'state', from: state.multiplayer.playerId, snapshot: createStateSnapshot() });
+  }
+  function refreshLobbyMembership(){
+    if(!isHost()) return;
+    state.multiplayer.members = state.multiplayer.members
+      .filter((m, idx, arr) => m && m.id && arr.findIndex(x => x.id === m.id) === idx)
+      .slice(0, 4);
+    const seatMap = { player: state.multiplayer.playerId };
+    const guests = state.multiplayer.members.filter(m => m.id !== state.multiplayer.playerId).slice(0,3);
+    guests.forEach((m, i) => { seatMap[`bot${i}`] = m.id; });
+    state.multiplayer.seats = seatMap;
+    state.botConfig.count = Math.max(1, Math.min(3, Math.max(1, state.multiplayer.members.length - 1 || Number(ui.botCountSlider.value) || 1)));
+    state.bots = Array.from({length: state.botConfig.count}, (_, i) => {
+      const existing = state.bots[i];
+      const pid = seatMap[`bot${i}`];
+      const member = state.multiplayer.members.find(m => m.id === pid);
+      return {
+        name: member?.name || existing?.name || BOT_NAMES[i],
+        skill: existing?.skill || ui.botSkillSelect.value,
+        bankroll: existing?.bankroll ?? 1000,
+        hands: existing?.hands || [],
+        activeHand: existing?.activeHand || 0,
+        roundOutcome: existing?.roundOutcome || '',
+        bet: existing?.bet || 0,
+      };
+    });
+    broadcastState();
+  }
+  function hostLobby(){
+    state.multiplayer.playerName = getPlayerName();
+    const socket = ensureLobbySocket(() => {
+      postLobbyMessage({
+        type:'create-lobby',
+        from: state.multiplayer.playerId,
+        name: state.multiplayer.playerName,
+        joinedAt: Date.now(),
+      });
+    });
+    if(!socket) return;
+    multiplayerStatus('Creating online lobby. Dealer stays automated.');
+  }
+  function joinLobby(){
+    const code = cleanLobbyCode(ui.lobbyCodeInput?.value || '');
+    if(code.length !== 6) return multiplayerStatus('Enter a 6-character lobby code.');
+    state.multiplayer.playerName = getPlayerName();
+    const socket = ensureLobbySocket(() => {
+      postLobbyMessage({
+        type:'join-lobby',
+        code,
+        from: state.multiplayer.playerId,
+        name: state.multiplayer.playerName,
+        joinedAt: Date.now(),
+      });
+    });
+    if(!socket) return;
+    multiplayerStatus(`Joining lobby ${code}...`);
+  }
+  function leaveLobby(){
+    if(state.multiplayer.connected) postLobbyMessage({ type:'leave-lobby', from: state.multiplayer.playerId });
+    resetLobbyState();
+    configureBots();
+    multiplayerStatus('Left lobby. Back to solo mode.');
+    updateUI();
+    updateButtons();
+  }
+  function handleLobbyMessage(ev){
+    let msg = ev?.data || {};
+    if(typeof msg === 'string'){
+      try{ msg = JSON.parse(msg); }catch(e){ return; }
+    }
+    if(!msg) return;
+    if(msg.type === 'lobby-created'){
+      state.multiplayer.isHost = true;
+      state.multiplayer.joined = true;
+      state.multiplayer.code = msg.code || '';
+      state.multiplayer.hostId = msg.hostId || state.multiplayer.playerId;
+      state.multiplayer.members = Array.isArray(msg.members) ? msg.members : [{ id: state.multiplayer.playerId, name: state.multiplayer.playerName, joinedAt: Date.now() }];
+      state.multiplayer.seats = msg.seats || { player: state.multiplayer.playerId };
+      state.multiplayer.seat = 'player';
+      updateLobbyUI();
+      multiplayerStatus(`Lobby ${state.multiplayer.code} created. Share this code with up to 3 guests. Dealer stays automated.`);
+      broadcastState();
+      return;
+    }
+    if(msg.type === 'join-accepted'){
+      state.multiplayer.isHost = false;
+      state.multiplayer.joined = true;
+      state.multiplayer.code = msg.code || state.multiplayer.code;
+      state.multiplayer.hostId = msg.hostId || '';
+      state.multiplayer.seat = 'spectator';
+      state.multiplayer.members = Array.isArray(msg.members) ? msg.members : [{ id: state.multiplayer.playerId, name: state.multiplayer.playerName, joinedAt: Date.now() }];
+      state.multiplayer.seats = msg.seats || {};
+      updateLobbyUI();
+      multiplayerStatus(`Connected to lobby ${state.multiplayer.code}. Waiting for host sync...`);
+      return;
+    }
+    if(msg.type === 'error'){
+      multiplayerStatus(msg.message || 'Lobby server error.');
+      if(!state.multiplayer.joined) closeSocket();
+      return;
+    }
+    if(msg.type === 'lobby-closed'){
+      resetLobbyState();
+      configureBots();
+      multiplayerStatus(msg.message || 'Lobby closed.');
+      updateUI();
+      updateButtons();
+      return;
+    }
+    if(msg.type === 'join-request' && isHost()){
+      if(!state.multiplayer.members.some(m => m.id === msg.from)){
+        state.multiplayer.members.push({ id: msg.from, name: String(msg.name || 'Guest').slice(0,18), joinedAt: msg.joinedAt || Date.now() });
+      }
+      refreshLobbyMembership();
+      multiplayerStatus(`Lobby live: ${state.multiplayer.members.length} connected.`);
+      return;
+    }
+    if(msg.type === 'leave' && isHost()){
+      state.multiplayer.members = state.multiplayer.members.filter(m => m.id !== msg.from);
+      refreshLobbyMembership();
+      multiplayerStatus(`Lobby live: ${state.multiplayer.members.length} connected.`);
+      return;
+    }
+    if(msg.type === 'membership' && isMultiplayer()){
+      if(Array.isArray(msg.members)) state.multiplayer.members = msg.members;
+      if(msg.seats) state.multiplayer.seats = msg.seats;
+      const assignedSeat = Object.entries(state.multiplayer.seats).find(([, pid]) => pid === state.multiplayer.playerId)?.[0];
+      if(assignedSeat) state.multiplayer.seat = assignedSeat;
+      updateLobbyUI();
+      updateButtons();
+      return;
+    }
+    if(msg.from === state.multiplayer.playerId) return;
+    if(msg.type === 'state' && isGuest()){
+      applyRemoteState(msg.snapshot);
+      return;
+    }
+    if(msg.type === 'action' && isHost()){
+      handleRemoteAction(msg);
+      return;
+    }
+  }
+  function remoteSeatCanAct(botIndex){
+    return state.phase === 'bots' && state.currentBot === botIndex;
+  }
+  function sendGuestAction(action){
+    if(!isGuest()) return;
+    const botIndex = humanSeatBotIndex();
+    if(botIndex < 0) return;
+    postLobbyMessage({ type:'action', from: state.multiplayer.playerId, action, botIndex });
+  }
+  function handleRemoteAction(msg){
+    const botIndex = Number(msg.botIndex);
+    const seat = `bot${botIndex}`;
+    if(state.multiplayer.seats?.[seat] !== msg.from) return;
+    if(!remoteSeatCanAct(botIndex)) return;
+    executeHumanBotAction(botIndex, msg.action);
+  }
+
+  class SoundBox{
+    constructor(){this.ctx=null}
+    init(){if(!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)()}
+    tone(freq=440,dur=.09,type='triangle',gain=.03){
+      if(!state.sound) return;
+      this.init();
+      if(this.ctx.state === 'suspended') this.ctx.resume();
+      const o=this.ctx.createOscillator();
+      const g=this.ctx.createGain();
+      o.type=type; o.frequency.value=freq; g.gain.value=gain;
+      o.connect(g); g.connect(this.ctx.destination);
+      const now=this.ctx.currentTime;
+      g.gain.setValueAtTime(gain,now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now+dur);
+      o.start(now); o.stop(now+dur);
+    }
+    card(){this.tone(440,.05,'triangle',.02)}
+    chip(){this.tone(740,.07,'square',.025)}
+    click(){this.tone(560,.05,'triangle',.02)}
+    win(){[660,880,1100].forEach((f,i)=>setTimeout(()=>this.tone(f,.12,'sine',.03), i*90))}
+    lose(){[260,220,180].forEach((f,i)=>setTimeout(()=>this.tone(f,.12,'sawtooth',.025), i*90))}
+    push(){[460,520].forEach((f,i)=>setTimeout(()=>this.tone(f,.08,'triangle',.02), i*90))}
+    blackjack(){[660,880,1320,1760].forEach((f,i)=>setTimeout(()=>this.tone(f,.10,'sine',.03), i*75))}
+  }
+  const sfx = new SoundBox();
+
+  const music = {
+    audio: null,
+    startedOnce: false,
+    ensure(){
+      if(this.audio) return this.audio;
+      const a = new Audio(encodeURI('Luxury Rain Jazz • Late Night Hotel Lounge • Smooth Jazz Soul-(p).mp3'));
+      a.loop = true;
+      a.preload = 'auto';
+      a.volume = 0.38;
+      this.audio = a;
+      return a;
+    },
+    async sync(triggeredByUser = false){
+      const a = this.ensure();
+      if(!state.musicOn){
+        a.pause();
+        return;
+      }
+      if(triggeredByUser) this.startedOnce = true;
+      if(!this.startedOnce) return;
+      try{
+        await a.play();
+      }catch(e){
+        // Browser autoplay rules may require a direct user gesture.
+      }
+    },
+    pause(){
+      if(this.audio) this.audio.pause();
+    },
+    toggle(){
+      state.musicOn = !state.musicOn;
+      try { localStorage.setItem('blackjackMusicOn', String(state.musicOn)); } catch (e) {}
+      syncMusicButton();
+      if(state.musicOn){
+        this.sync(true);
+      } else {
+        this.pause();
+      }
+    }
+  };
+
+  function syncMusicButton(){
+    ui.musicBtn.textContent = `Play Music: ${state.musicOn ? 'On' : 'Off'}`;
+  }
+
+  function getSpeedLevel(){
+    return Math.max(1, Math.min(5, Number(state.speedLevel) || 3));
+  }
+
+  function configureSpeed(){
+    state.speedLevel = Math.max(1, Math.min(5, Number(ui.dealSpeedSlider.value) || 3));
+    ui.dealSpeedValue.textContent = `${state.speedLevel} • ${SPEED_LABELS[state.speedLevel]}`;
+  }
+
+  function animationDurationMs(){
+    return (520 - (getSpeedLevel() - 1) * 95) * 4.59375;
+  }
+
+  function queueGapMs(){
+    return (130 - (getSpeedLevel() - 1) * 22) * 4.59375;
+  }
+
+  function botDelayMs(base = 420){
+    const ratio = {1:1.65, 2:1.25, 3:1, 4:0.72, 5:0.5}[getSpeedLevel()] || 1;
+    return Math.max(70, Math.round(base * ratio));
+  }
+
+  function resize(){
+    canvas.width = innerWidth * devicePixelRatio;
+    canvas.height = innerHeight * devicePixelRatio;
+    canvas.style.width = innerWidth + 'px';
+    canvas.style.height = innerHeight + 'px';
+    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+    state.deckPos = isPhone()
+      ? {x: innerWidth - 112, y: 34}
+      : {x: innerWidth - 170, y: innerHeight/2 - 110};
+  }
+  addEventListener('resize', () => { resize(); layoutMobileStatsPanel(); }); resize(); layoutMobileStatsPanel();
+
+  function shuffleShoe(){
+    state.shoe = [];
+    for(let d=0; d<DECKS; d++){
+      for(const suit of SUITS){
+        for(const rank of RANKS){
+          state.shoe.push({rank,suit,id: crypto.randomUUID ? crypto.randomUUID() : `${d}-${rank}-${suit}-${Math.random()}`});
+        }
+      }
+    }
+    for(let i=state.shoe.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [state.shoe[i],state.shoe[j]]=[state.shoe[j],state.shoe[i]];
+    }
+    state.discardCount = 0;
+    state.runningCount = 0;
+    updateUI();
+  }
+
+  function hiLoValue(card){
+    if(['2','3','4','5','6'].includes(card.rank)) return 1;
+    if(['10','J','Q','K','A'].includes(card.rank)) return -1;
+    return 0;
+  }
+
+  function drawCard(){
+    if(state.shoe.length < 52) shuffleShoe();
+    const card = state.shoe.pop();
+    state.runningCount += hiLoValue(card);
+    return card;
+  }
+
+  function cardValue(rank){
+    if(rank === 'A') return 11;
+    if(['K','Q','J'].includes(rank)) return 10;
+    return Number(rank);
+  }
+
+  function handTotals(cards){
+    let total = 0, aces = 0;
+    for(const c of cards){ total += cardValue(c.rank); if(c.rank === 'A') aces++; }
+    while(total > 21 && aces > 0){ total -= 10; aces--; }
+    const soft = cards.some(c=>c.rank==='A') && total <= 21 && cards.reduce((s,c)=>s+cardValue(c.rank),0) === total + 10;
+    return {total, soft};
+  }
+
+  function isBlackjack(cards){ return cards.length === 2 && handTotals(cards).total === 21; }
+  function newHand(bet){
+    return {cards:[], bet, done:false, stood:false, busted:false, blackjack:false, surrendered:false, doubled:false, hasSplit:false, splitAce:false, acted:false, outcome:''};
+  }
+
+  function resetTableForRound(){
+    state.dealer = {cards:[], hideHole:true};
+    state.hands = [];
+    state.activeHand = 0;
+    state.currentBot = 0;
+    state.currentBotHand = 0;
+    state.dealingQueue = [];
+    state.animations = [];
+    state.particles = [];
+    state.bots.forEach(bot => { bot.hands = []; bot.activeHand = 0; bot.roundOutcome = ''; bot.bet = 0; });
+  }
+
+  function botBetSize(bot){
+    if(bot.bankroll < MIN_BET) bot.bankroll = 1000;
+    const base = {easy:15, medium:25, hard:35, expert:50}[bot.skill] || 25;
+    return Math.max(MIN_BET, Math.min(bot.bankroll, base));
+  }
+
+  function configureBots(){
+    const count = Math.max(1, Math.min(3, Number(ui.botCountSlider.value) || 1));
+    const skill = ui.botSkillSelect.value;
+    state.botConfig = {count, skill};
+    const next = [];
+    for(let i=0;i<count;i++){
+      const existing = state.bots[i];
+      next.push({
+        name: BOT_NAMES[i],
+        skill,
+        bankroll: existing ? existing.bankroll : 1000,
+        hands: [],
+        activeHand: 0,
+        roundOutcome: '',
+        bet: 0,
+      });
+    }
+    state.bots = next;
+    if(isMultiplayer()){
+      state.bots.forEach((bot, i) => {
+        bot.name = assignedNameForSeat(`bot${i}`, bot.name);
+      });
+    }
+    ui.botCountValue.textContent = `${count} ${count === 1 ? 'bot' : 'bots'}`;
+    updateUI();
+  }
+
+  function currentHand(){ return state.hands[state.activeHand]; }
+  function currentBotObj(){ return state.bots[state.currentBot]; }
+  function currentBotHandObj(){ const bot = currentBotObj(); return bot ? bot.hands[bot.activeHand] : null; }
+
+  function canSplitPlayer(hand){ return hand.cards.length === 2 && hand.cards[0].rank === hand.cards[1].rank && !hand.hasSplit && state.hands.length === 1 && state.bankroll >= hand.bet; }
+  function canDoublePlayer(hand){ return hand.cards.length === 2 && !hand.done && state.bankroll >= hand.bet; }
+  function canSurrenderPlayer(hand){ return hand.cards.length === 2 && !hand.acted && state.hands.length === 1; }
+  function canSplitBot(bot, hand){ return hand.cards.length === 2 && hand.cards[0].rank === hand.cards[1].rank && !hand.hasSplit && bot.hands.length === 1 && bot.bankroll >= hand.bet; }
+  function canDoubleBot(bot, hand){ return hand.cards.length === 2 && !hand.done && bot.bankroll >= hand.bet; }
+  function canSurrenderBot(bot, hand){ return hand.cards.length === 2 && !hand.acted && bot.hands.length === 1; }
+
+  function placeBet(amount){
+    if(state.phase !== 'betting') return;
+    if(state.bankroll < amount) return flash('Not enough bankroll');
+    state.baseBet += amount;
+    state.bankroll -= amount;
+    sfx.chip();
+    state.message = `Bet placed: $${state.baseBet}`;
+    updateUI();
+    updateButtons();
+    layoutMobileStatsPanel();
+    broadcastState();
+  }
+
+  function clearBet(){
+    if(state.phase !== 'betting' || state.baseBet === 0) return;
+    state.bankroll += state.baseBet;
+    state.baseBet = 0;
+    state.message = 'Bet cleared.';
+    updateUI();
+    updateButtons();
+    broadcastState();
+  }
+
+  function startGame(){
+    if(!state.started){
+      const br = Number(ui.bankrollInput?.value || 1000);
+      if(!isNaN(br) && br > 0){
+        state.bankroll = br;
+        state.startingBankroll = br;
+      }
+      state.started = true;
+      shuffleShoe();
+    }
+    configureBots();
+    ui.menu.classList.add('hidden');
+    music.sync(true);
+    sfx.click();
+    updateUI();
+    updateButtons();
+    broadcastState();
+  }
+
+  function flash(text){
+    ui.toast.textContent = text;
+    ui.toast.classList.add('show');
+    clearTimeout(flash._t);
+    flash._t = setTimeout(()=>ui.toast.classList.remove('show'), 1300);
+  }
+
+  function beginDeal(){
+    if(state.phase === 'roundOver') nextRound();
+    if(state.phase !== 'betting') return;
+    if(state.baseBet < MIN_BET) return flash(`Minimum bet is $${MIN_BET}`);
+    configureBots();
+    resetTableForRound();
+    state.roundId++;
+    state.phase = 'animating';
+    state.message = 'Dealing...';
+    state.hands = [newHand(state.baseBet)];
+    state.bots.forEach(bot => {
+      const bet = botBetSize(bot);
+      bot.bankroll -= bet;
+      bot.bet = bet;
+      bot.hands = [newHand(bet)];
+      bot.activeHand = 0;
+      bot.roundOutcome = '';
+    });
+    const order = ['player', ...state.bots.map((_,i)=>({type:'bot', botIndex:i})), 'dealer'];
+    for(let round=0; round<2; round++){
+      for(const seat of order){
+        if(seat === 'player') queueCard('player',0, drawCard(), false);
+        else if(seat === 'dealer') queueCard('dealer',0, drawCard(), round === 1);
+        else queueCard('bot',0, drawCard(), false, seat.botIndex);
+      }
+    }
+    processQueue(() => {
+      checkNaturalsAndAdvance();
+      updateUI();
+      updateButtons();
+    });
+    updateButtons();
+    updateUI();
+    broadcastState();
+  }
+
+  function queueCard(target, handIndex, card, facedown, botIndex=null){
+    state.dealingQueue.push({target, handIndex, card, facedown, botIndex});
+  }
+
+  function processQueue(onDone){
+    if(state.dealingQueue.length === 0){ onDone && onDone(); return; }
+    const item = state.dealingQueue.shift();
+    const existingCount = item.target === 'dealer'
+      ? state.dealer.cards.length
+      : item.target === 'player'
+        ? (state.hands[item.handIndex]?.cards.length || 0)
+        : (state.bots[item.botIndex]?.hands[item.handIndex]?.cards.length || 0);
+    const dest = getCardDestination(item.target, item.handIndex, existingCount, item.botIndex);
+    let anim;
+    anim = {
+      x: state.deckPos.x, y: state.deckPos.y, w: 92, h: 132,
+      toX: dest.x, toY: dest.y, rot: -0.22 + Math.random()*0.44,
+      elapsed: 0, durMs: animationDurationMs(), queueGapMs: queueGapMs(),
+      card: item.card, facedown: item.facedown,
+      target:item.target, handIndex:item.handIndex, botIndex:item.botIndex,
+      nextQueued: false,
+      chainComplete: null,
+      onQueueNext: () => {
+        if(state.dealingQueue.length === 0){
+          anim.chainComplete = onDone || null;
+        } else {
+          processQueue(onDone);
+        }
+      },
+      onFinish: () => {
+        if(item.target === 'dealer'){
+          state.dealer.cards.push(item.card);
+          state.dealer.hideHole = item.facedown;
+        } else if(item.target === 'player'){
+          state.hands[item.handIndex].cards.push(item.card);
+        } else {
+          state.bots[item.botIndex].hands[item.handIndex].cards.push(item.card);
+        }
+        sfx.card();
+        if(typeof anim.chainComplete === 'function') anim.chainComplete();
+      }
+    };
+    state.animations.push(anim);
+  }
+
+  function appendRoundCountToMessage(base){
+    return `${base} Running count: ${countDisplay()}.`;
+  }
+
+  function countDisplay(){
+    return `${state.runningCount > 0 ? '+' : ''}${state.runningCount}`;
+  }
+
+  function checkNaturalsAndAdvance(){
+    const dealerBJ = isBlackjack(state.dealer.cards);
+    const playerBJ = isBlackjack(state.hands[0].cards);
+    const botBJs = state.bots.map(bot => isBlackjack(bot.hands[0].cards));
+    if(dealerBJ){
+      state.dealer.hideHole = false;
+      if(playerBJ) settleHand(state.hands[0], 'push');
+      else settleHand(state.hands[0], 'lose');
+      state.hands[0].done = true;
+      state.hands[0].outcome = playerBJ ? 'Push' : 'Lose';
+      state.bots.forEach((bot, i) => {
+        const hand = bot.hands[0];
+        if(botBJs[i]) settleBotHand(bot, hand, 'push');
+        else settleBotHand(bot, hand, 'lose');
+        hand.done = true;
+      });
+      state.message = appendRoundCountToMessage('Dealer has blackjack.');
+      state.phase = 'roundOver';
+      state.baseBet = 0;
+      sfx.lose();
+      updateRoundOutcomeLabels();
+      return;
+    }
+
+    state.dealer.hideHole = true;
+    let naturals = 0;
+    if(playerBJ){
+      const hand = state.hands[0];
+      settleHand(hand, 'blackjack');
+      hand.done = true; hand.blackjack = true;
+      naturals++;
+    }
+    state.bots.forEach((bot, i) => {
+      const hand = bot.hands[0];
+      if(botBJs[i]){
+        settleBotHand(bot, hand, 'blackjack');
+        hand.done = true; hand.blackjack = true;
+        naturals++;
+      }
+    });
+    if(playerBJ) flash('Blackjack!');
+    if(naturals){
+      sfx.blackjack();
+      burst();
+      state.message = 'Naturals locked in. Remaining seats keep playing.';
+    }
+    advanceFlow();
+  }
+
+  function advanceFlow(){
+    while(state.activeHand < state.hands.length && state.hands[state.activeHand].done) state.activeHand++;
+    if(state.activeHand < state.hands.length){
+      state.phase = 'player';
+      state.message = `Your move on Hand ${state.activeHand+1}`;
+      updateButtons();
+      return;
+    }
+    const nextBot = findNextBotTurn();
+    if(nextBot){
+      state.currentBot = nextBot.botIndex;
+      state.bots[state.currentBot].activeHand = nextBot.handIndex;
+      state.phase = 'bots';
+      if(isHumanControlledBot(nextBot.botIndex)){
+        state.message = `${state.bots[state.currentBot].name} is up.`;
+        updateButtons();
+        broadcastState();
+      } else {
+        state.message = `${state.bots[state.currentBot].name} is thinking...`;
+        updateButtons();
+        broadcastState();
+        setTimeout(playBots, botDelayMs(450));
+      }
+      return;
+    }
+    revealHoleAndPlayDealer();
+  }
+
+  function findNextBotTurn(){
+    for(let b=0;b<state.bots.length;b++){
+      const bot = state.bots[b];
+      for(let h=0; h<bot.hands.length; h++){
+        if(!bot.hands[h].done) return {botIndex:b, handIndex:h};
+      }
+    }
+    return null;
+  }
+
+  function revealHoleAndPlayDealer(){
+    state.dealer.hideHole = false;
+    if(handTotals(state.dealer.cards).total === 21 && state.dealer.cards.length === 2) flash('Dealer Blackjack');
+    const step = () => {
+      const t = handTotals(state.dealer.cards);
+      if(t.total < 17){
+        state.phase = 'animating';
+        queueCard('dealer', 0, drawCard(), false);
+        processQueue(step);
+      } else {
+        finalizeRound();
+      }
+      updateUI();
+    };
+    step();
+  }
+
+  function hit(){
+    if(state.phase !== 'player') return;
+    const hand = currentHand();
+    if(!hand || hand.done) return;
+    hand.acted = true;
+    state.phase = 'animating';
+    queueCard('player', state.activeHand, drawCard(), false);
+    processQueue(() => {
+      const total = handTotals(hand.cards).total;
+      if(total > 21){
+        hand.busted = true; hand.done = true; hand.outcome = 'Bust';
+        flash(`Hand ${state.activeHand+1} busted`);
+      } else if(hand.splitAce){
+        hand.done = true; hand.stood = true;
+      }
+      advanceFlow();
+      updateUI(); updateButtons();
+    });
+    updateButtons();
+  }
+
+  function stand(){
+    if(state.phase !== 'player') return;
+    const hand = currentHand();
+    if(!hand || hand.done) return;
+    hand.stood = true; hand.done = true; hand.acted = true;
+    state.message = `Hand ${state.activeHand+1} stands.`;
+    advanceFlow();
+    updateUI(); updateButtons();
+  }
+
+  function doubleDown(){
+    if(state.phase !== 'player') return;
+    const hand = currentHand();
+    if(!hand || !canDoublePlayer(hand)) return flash('Double not allowed');
+    state.bankroll -= hand.bet;
+    hand.bet *= 2;
+    hand.doubled = true;
+    hand.acted = true;
+    state.phase = 'animating';
+    queueCard('player', state.activeHand, drawCard(), false);
+    processQueue(() => {
+      const total = handTotals(hand.cards).total;
+      if(total > 21){ hand.busted = true; hand.outcome = 'Bust'; }
+      hand.done = true; hand.stood = !hand.busted;
+      flash(`Hand ${state.activeHand+1} doubled`);
+      advanceFlow();
+      updateUI(); updateButtons();
+    });
+    updateUI(); updateButtons();
+  }
+
+  function split(){
+    if(state.phase !== 'player') return;
+    const hand = currentHand();
+    if(!hand || !canSplitPlayer(hand)) return flash('Split not allowed');
+    state.bankroll -= hand.bet;
+    const second = hand.cards.pop();
+    const newHandObj = newHand(hand.bet);
+    newHandObj.cards.push(second);
+    hand.hasSplit = true;
+    newHandObj.hasSplit = true;
+    const isAceSplit = hand.cards[0].rank === 'A' && second.rank === 'A';
+    hand.splitAce = isAceSplit;
+    newHandObj.splitAce = isAceSplit;
+    state.hands.push(newHandObj);
+    state.phase = 'animating';
+    queueCard('player', 0, drawCard(), false);
+    queueCard('player', 1, drawCard(), false);
+    processQueue(() => {
+      if(isAceSplit){
+        hand.done = true; hand.stood = true;
+        newHandObj.done = true; newHandObj.stood = true;
+      }
+      flash('Split!');
+      advanceFlow();
+      updateUI(); updateButtons();
+    });
+    updateUI(); updateButtons();
+  }
+
+  function surrender(){
+    if(state.phase !== 'player') return;
+    const hand = currentHand();
+    if(!hand || !canSurrenderPlayer(hand)) return flash('Surrender not allowed');
+    hand.surrendered = true; hand.done = true; hand.outcome = 'Surrender';
+    state.bankroll += hand.bet / 2;
+    advanceFlow();
+    updateUI(); updateButtons();
+    broadcastState();
+  }
+
+  function settleHand(hand, result){
+    if(result === 'blackjack'){
+      state.bankroll += hand.bet * 2.5;
+      hand.outcome = 'Blackjack';
+    } else if(result === 'win'){
+      state.bankroll += hand.bet * 2;
+      hand.outcome = 'Win';
+    } else if(result === 'push'){
+      state.bankroll += hand.bet;
+      hand.outcome = 'Push';
+    } else if(result === 'surrender'){
+      state.bankroll += hand.bet / 2;
+      hand.outcome = 'Surrender';
+    } else {
+      hand.outcome = hand.outcome || 'Lose';
+    }
+  }
+
+  function settleBotHand(bot, hand, result){
+    if(result === 'blackjack'){
+      bot.bankroll += hand.bet * 2.5;
+      hand.outcome = 'Blackjack';
+    } else if(result === 'win'){
+      bot.bankroll += hand.bet * 2;
+      hand.outcome = 'Win';
+    } else if(result === 'push'){
+      bot.bankroll += hand.bet;
+      hand.outcome = 'Push';
+    } else if(result === 'surrender'){
+      bot.bankroll += hand.bet / 2;
+      hand.outcome = 'Surrender';
+    } else {
+      hand.outcome = hand.outcome || 'Lose';
+    }
+  }
+
+  function updateRoundOutcomeLabels(){
+    state.bots.forEach(bot => {
+      const labels = bot.hands.map(h => h.outcome).filter(Boolean);
+      bot.roundOutcome = labels.join(' / ');
+    });
+  }
+
+  function finalizeRound(){
+    state.phase = 'roundOver';
+    state.dealer.hideHole = false;
+    const dealerTotal = handTotals(state.dealer.cards).total;
+    let wins=0, losses=0, pushes=0;
+    for(const hand of state.hands){
+      if(hand.blackjack) continue;
+      if(hand.surrendered){ settleHand(hand, 'surrender'); pushes++; continue; }
+      const playerTotal = handTotals(hand.cards).total;
+      if(hand.busted){ settleHand(hand,'lose'); losses++; continue; }
+      if(dealerTotal > 21){ settleHand(hand,'win'); wins++; continue; }
+      if(playerTotal > dealerTotal){ settleHand(hand,'win'); wins++; }
+      else if(playerTotal < dealerTotal){ settleHand(hand,'lose'); losses++; }
+      else { settleHand(hand,'push'); pushes++; }
+    }
+    state.bots.forEach(bot => {
+      bot.hands.forEach(hand => {
+        if(hand.blackjack) return;
+        if(hand.surrendered){ settleBotHand(bot, hand, 'surrender'); return; }
+        const total = handTotals(hand.cards).total;
+        if(hand.busted){ settleBotHand(bot, hand, 'lose'); return; }
+        if(dealerTotal > 21){ settleBotHand(bot, hand, 'win'); return; }
+        if(total > dealerTotal) settleBotHand(bot, hand, 'win');
+        else if(total < dealerTotal) settleBotHand(bot, hand, 'lose');
+        else settleBotHand(bot, hand, 'push');
+      });
+    });
+    if(wins && !losses){ state.message = appendRoundCountToMessage(pushes ? 'Wins and pushes.' : 'You win the round!'); sfx.win(); burst(); }
+    else if(losses && !wins && !pushes){ state.message = appendRoundCountToMessage('Dealer sweeps your corner.'); sfx.lose(); }
+    else { state.message = appendRoundCountToMessage('Mixed results.'); sfx.push(); }
+    state.baseBet = 0;
+    updateRoundOutcomeLabels();
+    updateUI(); updateButtons();
+  }
+
+  function nextRound(){
+    if(state.phase !== 'roundOver') return;
+    resetTableForRound();
+    state.phase = 'betting';
+    state.message = state.bankroll > 0 ? 'Place a bet to begin.' : 'Bankroll empty. Refresh for a fresh stack.';
+    updateUI(); updateButtons();
+    broadcastState();
+  }
+
+
+  function layoutMobileStatsPanel(){
+    if(!ui.statsPanel) return;
+    if(!isPhone()){
+      ui.statsPanel.style.top = '';
+      ui.statsPanel.style.right = '';
+      ui.statsPanel.style.bottom = '';
+      return;
+    }
+    // On mobile, let the CSS @media rule control the stats panel position.
+    ui.statsPanel.style.top = '';
+    ui.statsPanel.style.right = '';
+    ui.statsPanel.style.bottom = '';
+  }
+
+  function updateUI(){
+    ui.bankroll.textContent = `$${state.bankroll.toFixed(0)}`;
+    ui.bet.textContent = `$${state.baseBet.toFixed(0)}`;
+    ui.shoeInfo.textContent = `${(state.shoe.length / 52).toFixed(2)} decks`;
+    ui.countInfo.textContent = state.phase === 'roundOver' ? countDisplay() : 'Shown after round';
+    ui.statusText.textContent = state.message;
+    ui.botCountValue.textContent = `${state.botConfig.count} ${state.botConfig.count === 1 ? 'bot' : 'bots'}`;
+    updateLobbyUI();
+  }
+
+  function updateButtons(){
+    const hand = currentHand();
+    if(isGuest()){
+      const botIndex = humanSeatBotIndex();
+      const bot = state.bots[botIndex];
+      const guestHand = bot?.hands?.[bot?.activeHand || 0];
+      const guestTurn = botIndex >= 0 && state.phase === 'bots' && state.currentBot === botIndex && guestHand && !guestHand.done;
+      ui.dealBtn.disabled = true;
+      ui.hitBtn.disabled = !guestTurn;
+      ui.standBtn.disabled = !guestTurn;
+      ui.doubleBtn.disabled = !(guestTurn && canDoubleBot(bot, guestHand));
+      ui.splitBtn.disabled = !(guestTurn && canSplitBot(bot, guestHand));
+      ui.surrenderBtn.disabled = !(guestTurn && canSurrenderBot(bot, guestHand));
+      ui.clearBtn.disabled = true;
+      ui.newRoundBtn.disabled = true;
+      return;
+    }
+    ui.dealBtn.disabled = !(state.phase === 'betting' && state.baseBet >= MIN_BET);
+    ui.hitBtn.disabled = !(state.phase === 'player' && hand && !hand.done);
+    ui.standBtn.disabled = !(state.phase === 'player' && hand && !hand.done);
+    ui.doubleBtn.disabled = !(state.phase === 'player' && hand && canDoublePlayer(hand));
+    ui.splitBtn.disabled = !(state.phase === 'player' && hand && canSplitPlayer(hand));
+    ui.surrenderBtn.disabled = !(state.phase === 'player' && hand && canSurrenderPlayer(hand));
+    ui.clearBtn.disabled = !(state.phase === 'betting' && state.baseBet > 0);
+    ui.newRoundBtn.disabled = state.phase !== 'roundOver';
+  }
+
+  function getBotCenters(){
+    const count = Math.max(1, state.bots.length || state.botConfig.count || 1);
+    if(isPhone()){
+      const { topY, bottomY } = getMobileBotLayout();
+      if(count <= 3){
+        const xs = count === 1
+          ? [innerWidth * 0.5]
+          : count === 2
+            ? [innerWidth * 0.28, innerWidth * 0.72]
+            : [innerWidth * 0.2, innerWidth * 0.5, innerWidth * 0.8];
+        return xs.map(x => ({x, y: topY}));
+      }
+      const firstRowCount = 3;
+      const secondRowCount = count - 3;
+      const firstRowXs = [innerWidth * 0.2, innerWidth * 0.5, innerWidth * 0.8];
+      const secondRowXs = secondRowCount === 1
+        ? [innerWidth * 0.5]
+        : secondRowCount === 2
+          ? [innerWidth * 0.32, innerWidth * 0.68]
+          : [innerWidth * 0.2, innerWidth * 0.5, innerWidth * 0.8];
+      return [
+        ...firstRowXs.slice(0, firstRowCount).map(x => ({x, y: topY})),
+        ...secondRowXs.slice(0, secondRowCount).map(x => ({x, y: bottomY}))
+      ];
+    }
+    const y = Math.min(innerHeight * 0.46, 330);
+    if(count === 1) return [{x:innerWidth/2, y}];
+    const left = innerWidth * 0.2;
+    const right = innerWidth * 0.8;
+    const span = right - left;
+    return Array.from({length:count}, (_,i) => ({x:left + span*(i/(count-1)), y}));
+  }
+
+  function getCardDestination(target, handIndex, cardIndex, botIndex=null){
+    const phoneScale = isPhone() ? 0.82 : 1;
+    const cardW = 92 * phoneScale, gap = 28 * phoneScale;
+    if(target === 'dealer'){
+      const totalW = cardW + Math.max(0,state.dealer.cards.length)*gap;
+      const startX = innerWidth/2 - totalW/2;
+      return {x:startX + cardIndex*gap, y:isPhone() ? 116 : 110};
+    }
+    if(target === 'player'){
+      const totalHands = state.hands.length || 1;
+      const centers = totalHands === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
+      const centerX = centers[handIndex] || innerWidth/2;
+      const hand = state.hands[handIndex] || {cards:[]};
+      const totalW = cardW + Math.max(0, hand.cards.length)*gap;
+      const startX = centerX - totalW/2;
+      return {x:startX + cardIndex*gap, y:isPhone() ? innerHeight - 330 : innerHeight - 270};
+    }
+    const centers = getBotCenters();
+    const seat = centers[botIndex] || {x:innerWidth/2, y:innerHeight*0.44};
+    const bot = state.bots[botIndex] || {hands:[{cards:[]}]};
+    const centerShift = bot.hands.length === 1 ? [0] : (isPhone() ? [-44, 44] : [-68, 68]);
+    const centerX = seat.x + (centerShift[handIndex] || 0);
+    const hand = bot.hands[handIndex] || {cards:[]};
+    const scale = 0.7 * phoneScale;
+    const scaledW = 92 * scale;
+    const scaledGap = 28 * scale;
+    const totalW = scaledW + Math.max(0, hand.cards.length)*scaledGap;
+    const startX = centerX - totalW/2;
+    return {x:startX + cardIndex*scaledGap, y:seat.y};
+  }
+
+  function burst(){
+    for(let i=0;i<36;i++){
+      state.particles.push({
+        x: innerWidth/2, y: innerHeight/2,
+        vx: (Math.random()-.5)*8, vy: (Math.random()-.5)*8 - 2,
+        life: 50 + Math.random()*30,
+        size: 4 + Math.random()*6,
+        hue: Math.random() < .7 ? 46 : (Math.random() < .5 ? 350 : 190)
+      });
+    }
+  }
+
+  function draw(now = performance.now()){
+    const deltaMs = Math.max(8, Math.min(34, now - state.lastFrameTime || 16));
+    state.lastFrameTime = now;
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    drawTable();
+    drawDealerArea();
+    drawBotAreas();
+    drawPlayerAreas();
+    drawDeck();
+    drawAnimations(deltaMs);
+    drawParticles(deltaMs);
+  }
+
+  function drawTable(){
+    const g = ctx.createRadialGradient(innerWidth/2, innerHeight/2, 80, innerWidth/2, innerHeight/2, innerWidth*.7);
+    g.addColorStop(0, '#17764a'); g.addColorStop(.65, '#0e5d3b'); g.addColorStop(1, '#083120');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,innerWidth,innerHeight);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(246,214,117,.28)';
+    ctx.lineWidth = 4;
+    roundedRect(ctx, 28, 28, innerWidth-56, innerHeight-56, 28);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(246,214,117,.15)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(innerWidth/2, innerHeight*0.62, Math.min(innerWidth*.34, 340), Math.PI*.12, Math.PI*.88, true);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.font = '700 18px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('', innerWidth/2, 88);
+    ctx.fillText('', innerWidth/2, innerHeight - 82);
+  }
+
+  function drawDealerArea(){
+    const reveal = !state.dealer.hideHole;
+    const y = isPhone() ? 134 : 134;
+    drawHandBlock(state.dealer.cards, innerWidth/2, y, {revealAll:reveal, label:'Dealer'});
+    const shownCards = reveal ? state.dealer.cards : [state.dealer.cards[0]].filter(Boolean);
+    const total = shownCards.length ? handTotals(shownCards).total : 0;
+  }
+
+  function drawBotAreas(){
+    const centers = getBotCenters();
+    state.bots.forEach((bot, i) => {
+      const seat = centers[i];
+      const activeBot = state.phase === 'bots' && i === state.currentBot;
+      const shifts = bot.hands.length === 1 ? [0] : [-68, 68];
+      bot.hands.forEach((hand, handIndex) => {
+        const centerX = seat.x + (shifts[handIndex] || 0);
+        const active = activeBot && bot.activeHand === handIndex && !hand.done;
+        if(active){
+          ctx.save();
+          ctx.strokeStyle = 'rgba(122,224,255,.75)'; ctx.lineWidth = 3;
+          roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
+          ctx.restore();
+        }
+        drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        const total = hand.cards.length ? handTotals(hand.cards).total : 0;
+      });
+      ctx.save();
+      ctx.textAlign='center';
+      if(bot.roundOutcome){
+        ctx.fillStyle='rgba(255,231,167,.95)';
+        ctx.font = isPhone() ? '900 10px Inter, sans-serif' : '900 12px Inter, sans-serif';
+        ctx.fillText(bot.roundOutcome.toUpperCase(), seat.x, seat.y + (isPhone() ? 118 : 132));
+      }
+      ctx.restore();
+    });
+  }
+
+  function drawPlayerAreas(){
+    const centers = state.hands.length === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
+    state.hands.forEach((hand, i) => {
+      const center = centers[i] || innerWidth/2;
+      const active = state.phase === 'player' && i === state.activeHand && !hand.done;
+      const handY = getPlayerHandY();
+      drawHandBlock(hand.cards, center, handY, {revealAll:true, active, hand, label:``});
+      const total = hand.cards.length ? handTotals(hand.cards).total : 0;
+      if(hand.outcome){
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,.45)';
+        roundedRect(ctx, center - 66, innerHeight - 138, 132, 36, 18); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '900 18px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(hand.outcome.toUpperCase(), center, innerHeight - 113);
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.fillStyle = 'rgba(255,255,255,.88)';
+      ctx.font = '700 14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      let meta = `$${hand.bet}` + (hand.doubled ? ' • doubled' : '') + (hand.splitAce ? ' • split aces' : '');
+      // bet text removed
+      ctx.restore();
+    });
+  }
+
+  function drawScoreBubble(x,y,text,scale=1){
+    const w = 84 * scale, h = 36 * scale;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.45)';
+    roundedRect(ctx, x-w/2, y-h/2, w, h, 18*scale); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = `${Math.round(18*scale)}px Inter, sans-serif`; ctx.fontWeight='900'; ctx.textAlign = 'center'; ctx.textBaseline='middle';
+    ctx.fillText(String(text), x, y+1);
+    ctx.restore();
+  }
+
+  function drawHandBlock(cards, centerX, y, opts={}){
+    const revealAll = opts.revealAll ?? true;
+    const active = opts.active ?? false;
+    const label = opts.label || '';
+    const scale = opts.scale || 1;
+    const metaOffset = (opts.metaOffset || 74) * (isPhone() ? 0.9 : 1);
+    const gap = 28 * scale, cardW = 92 * scale;
+    const totalW = cards.length ? cardW + Math.max(0,cards.length-1)*gap : cardW;
+    const startX = centerX - totalW/2;
+    for(let i=0;i<cards.length;i++){
+      const facedown = !revealAll && i === 1;
+      drawCardGraphic(startX + i*gap, y, cards[i], facedown, active ? Math.sin(performance.now()/140+i)*.01 : 0, scale);
+    }
+    ctx.save();
+    ctx.fillStyle='rgba(255,255,255,.78)';
+    ctx.font=`800 ${Math.round(18*scale)}px Inter, sans-serif`;
+    ctx.textAlign='center';
+    ctx.fillText(label, centerX, y-16*scale);
+    if(opts.hand){
+      ctx.font=`700 ${Math.round(14*scale)}px Inter, sans-serif`;
+      const hand = opts.hand;
+      let meta = `$${hand.bet}` + (hand.doubled ? ' • dbl' : '') + (hand.splitAce ? ' • aces' : '');
+      ctx.fillStyle='rgba(255,255,255,.88)';
+      // bet text removed
+    }
+    ctx.restore();
+  }
+
+  function drawCardGraphic(x,y,card,facedown=false,tilt=0,scale=1){
+    const phoneScale = isPhone() ? 0.82 : 1;
+    scale *= phoneScale;
+    const w=92*scale,h=132*scale;
+    ctx.save();
+    ctx.translate(x+w/2,y+h/2);
+    ctx.rotate(tilt);
+    ctx.translate(-w/2,-h/2);
+
+    ctx.shadowColor='rgba(0,0,0,.35)'; ctx.shadowBlur=14*scale; ctx.shadowOffsetY=8*scale;
+    ctx.fillStyle='#fffdf8';
+    roundedRect(ctx,0,0,w,h,12*scale); ctx.fill();
+    ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+
+    if(facedown){
+      const g = ctx.createLinearGradient(0,0,w,h);
+      g.addColorStop(0,'#0b2352'); g.addColorStop(1,'#1f6ed3');
+      ctx.fillStyle=g; roundedRect(ctx,5*scale,5*scale,w-10*scale,h-10*scale,10*scale); ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=2*scale;
+      roundedRect(ctx,11*scale,11*scale,w-22*scale,h-22*scale,8*scale); ctx.stroke();
+      for(let yy=18*scale; yy<h-18*scale; yy+=12*scale){
+        for(let xx=18*scale; xx<w-18*scale; xx+=12*scale){
+          ctx.fillStyle = ((Math.round(xx/scale)+Math.round(yy/scale))%24===0) ? 'rgba(255,255,255,.12)' : 'rgba(255,255,255,.2)';
+          ctx.beginPath(); ctx.arc(xx,yy,3*scale,0,Math.PI*2); ctx.fill();
+        }
+      }
+    } else {
+      const red = RED_SUITS.has(card.suit);
+      ctx.fillStyle = red ? '#cf3348' : '#111';
+      ctx.font=`900 ${24*scale}px Georgia, serif`;
+      ctx.textAlign='left';
+      ctx.fillText(card.rank, 10*scale, 28*scale);
+      ctx.font=`700 ${20*scale}px Georgia, serif`;
+      ctx.fillText(card.suit, 12*scale, 48*scale);
+      ctx.textAlign='center';
+      ctx.font=`900 ${38*scale}px Georgia, serif`;
+      ctx.fillText(card.suit, w/2, h/2 + 12*scale);
+      ctx.save();
+      ctx.translate(w,h); ctx.rotate(Math.PI);
+      ctx.textAlign='left';
+      ctx.font=`900 ${24*scale}px Georgia, serif`;
+      ctx.fillText(card.rank, 10*scale, 28*scale);
+      ctx.font=`700 ${20*scale}px Georgia, serif`;
+      ctx.fillText(card.suit, 12*scale, 48*scale);
+      ctx.restore();
+    }
+
+    ctx.strokeStyle='rgba(0,0,0,.12)'; ctx.lineWidth=1;
+    roundedRect(ctx,.5,.5,w-1,h-1,12*scale); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawDeck(){
+    const {x,y}=state.deckPos;
+    for(let i=0;i<4;i++) drawCardGraphic(x+i*2,y-i*2,{rank:'A',suit:'♠'},true,0);
+    ctx.save();
+    ctx.fillStyle='rgba(255,255,255,.78)'; ctx.font='800 15px Inter, sans-serif'; ctx.textAlign='center';
+    ctx.fillText('SHOE', x+50, y+158);
+    ctx.restore();
+  }
+
+  function drawAnimations(deltaMs){
+    const remaining = [];
+    const finished = [];
+    for(const a of state.animations){
+      a.elapsed += deltaMs;
+      if(!a.nextQueued && a.elapsed >= a.queueGapMs){
+        a.nextQueued = true;
+        if(typeof a.onQueueNext === 'function') a.onQueueNext();
+      }
+      const p = Math.min(1, a.elapsed / a.durMs);
+      const eased = 1 - Math.pow(1-p,3);
+      const x = a.x + (a.toX - a.x) * eased;
+      const y = a.y + (a.toY - a.y) * eased - Math.sin(p*Math.PI)*26;
+      const scale = a.target === 'bot' ? 0.7 : 1;
+      drawCardGraphic(x, y, a.card, a.facedown, a.rot*(1-eased), scale);
+      if(p >= 1) finished.push(a);
+      else remaining.push(a);
+    }
+    state.animations = remaining;
+    for(const a of finished){
+      if(typeof a.onFinish === 'function') a.onFinish();
+    }
+  }
+
+  function drawParticles(deltaMs){
+    state.particles = state.particles.filter(p => p.life > 0);
+    for(const p of state.particles){
+      p.life--; p.x += p.vx; p.y += p.vy; p.vy += .08;
+      ctx.save();
+      ctx.fillStyle = `hsla(${p.hue} 90% 60% / ${Math.max(0,p.life/80)})`;
+      ctx.fillRect(p.x,p.y,p.size,p.size);
+      ctx.restore();
+    }
+  }
+
+  function roundedRect(ctx,x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function dealerUpValue(){
+    const card = state.dealer.cards[0];
+    if(!card) return 0;
+    return card.rank === 'A' ? 11 : Math.min(10, cardValue(card.rank));
+  }
+
+  function pairRankValue(rank){
+    return rank === 'A' ? 11 : rank === 'K' || rank === 'Q' || rank === 'J' || rank === '10' ? 10 : Number(rank);
+  }
+
+  function bestBasicAction(hand, dealerUp, allowDouble, allowSplit, allowSurrender){
+    const totals = handTotals(hand.cards);
+    const total = totals.total;
+    const soft = totals.soft;
+    const rank = hand.cards[0]?.rank;
+    if(allowSplit && hand.cards.length === 2 && hand.cards[0].rank === hand.cards[1].rank){
+      const pair = pairRankValue(rank);
+      if(pair === 11 || pair === 8) return 'split';
+      if(pair === 10) return 'stand';
+      if(pair === 9) return [2,3,4,5,6,8,9].includes(dealerUp) ? 'split' : 'stand';
+      if(pair === 7) return dealerUp <= 7 ? 'split' : 'hit';
+      if(pair === 6) return dealerUp >= 2 && dealerUp <= 6 ? 'split' : 'hit';
+      if(pair === 5) return allowDouble && dealerUp >= 2 && dealerUp <= 9 ? 'double' : 'hit';
+      if(pair === 4) return dealerUp === 5 || dealerUp === 6 ? 'split' : 'hit';
+      if(pair === 3 || pair === 2) return dealerUp >= 2 && dealerUp <= 7 ? 'split' : 'hit';
+    }
+    if(allowSurrender && !soft){
+      if(total === 16 && [9,10,11].includes(dealerUp)) return 'surrender';
+      if(total === 15 && dealerUp === 10) return 'surrender';
+    }
+    if(soft){
+      if(total >= 20) return 'stand';
+      if(total === 19) return dealerUp === 6 && allowDouble ? 'double' : 'stand';
+      if(total === 18){
+        if(allowDouble && dealerUp >= 3 && dealerUp <= 6) return 'double';
+        return dealerUp >= 9 || dealerUp === 11 ? 'hit' : 'stand';
+      }
+      if(total === 17 || total === 16) return allowDouble && dealerUp >= 4 && dealerUp <= 6 ? 'double' : 'hit';
+      if(total === 15 || total === 14) return allowDouble && dealerUp >= 4 && dealerUp <= 6 ? 'double' : 'hit';
+      if(total === 13 || total === 12) return allowDouble && (dealerUp === 5 || dealerUp === 6) ? 'double' : 'hit';
+    }
+    if(total >= 17) return 'stand';
+    if(total >= 13 && total <= 16) return dealerUp >= 2 && dealerUp <= 6 ? 'stand' : 'hit';
+    if(total === 12) return dealerUp >= 4 && dealerUp <= 6 ? 'stand' : 'hit';
+    if(total === 11) return allowDouble ? 'double' : 'hit';
+    if(total === 10) return allowDouble && dealerUp >= 2 && dealerUp <= 9 ? 'double' : 'hit';
+    if(total === 9) return allowDouble && dealerUp >= 3 && dealerUp <= 6 ? 'double' : 'hit';
+    return 'hit';
+  }
+
+  function randomLegalAction(bot, hand){
+    const legal = ['hit','stand'];
+    if(canDoubleBot(bot, hand)) legal.push('double');
+    if(canSplitBot(bot, hand)) legal.push('split');
+    if(canSurrenderBot(bot, hand)) legal.push('surrender');
+    return legal[Math.floor(Math.random()*legal.length)];
+  }
+
+  function chooseBotAction(bot, hand){
+    const perfect = bestBasicAction(hand, dealerUpValue(), canDoubleBot(bot, hand), canSplitBot(bot, hand), canSurrenderBot(bot, hand));
+    const accuracy = {easy:0.45, medium:0.72, hard:0.9, expert:1}[bot.skill] || 0.72;
+    if(Math.random() <= accuracy) return perfect;
+    if(bot.skill === 'easy'){
+      const total = handTotals(hand.cards).total;
+      return total >= 15 ? 'stand' : 'hit';
+    }
+    let alt = randomLegalAction(bot, hand);
+    if(alt === perfect) alt = perfect === 'hit' ? 'stand' : 'hit';
+    return alt;
+  }
+
+
+  function executeHumanBotAction(botIndex, action){
+    const bot = state.bots[botIndex];
+    if(!bot) return;
+    const hand = bot.hands[bot.activeHand];
+    if(!hand || hand.done) return;
+    if(action === 'stand'){
+      hand.stood = true; hand.done = true; hand.acted = true;
+      advanceFlow();
+      updateUI(); updateButtons(); broadcastState();
+      return;
+    }
+    if(action === 'surrender' && canSurrenderBot(bot, hand)){
+      hand.surrendered = true; hand.done = true; hand.outcome = 'Surrender';
+      bot.bankroll += hand.bet / 2;
+      advanceFlow();
+      updateUI(); updateButtons(); broadcastState();
+      return;
+    }
+    if(action === 'split' && canSplitBot(bot, hand)){
+      bot.bankroll -= hand.bet;
+      const second = hand.cards.pop();
+      const newHandObj = newHand(hand.bet);
+      newHandObj.cards.push(second);
+      hand.hasSplit = true;
+      newHandObj.hasSplit = true;
+      const isAceSplit = hand.cards[0].rank === 'A' && second.rank === 'A';
+      hand.splitAce = isAceSplit;
+      newHandObj.splitAce = isAceSplit;
+      bot.hands.push(newHandObj);
+      state.phase = 'animating';
+      queueCard('bot', 0, drawCard(), false, botIndex);
+      queueCard('bot', 1, drawCard(), false, botIndex);
+      processQueue(() => {
+        if(isAceSplit){
+          hand.done = true; hand.stood = true;
+          newHandObj.done = true; newHandObj.stood = true;
+        }
+        advanceFlow();
+        updateUI(); updateButtons(); broadcastState();
+      });
+      broadcastState();
+      return;
+    }
+    if(action === 'double' && canDoubleBot(bot, hand)){
+      bot.bankroll -= hand.bet;
+      hand.bet *= 2;
+      hand.doubled = true;
+      hand.acted = true;
+      state.phase = 'animating';
+      queueCard('bot', bot.activeHand, drawCard(), false, botIndex);
+      processQueue(() => {
+        const total = handTotals(hand.cards).total;
+        if(total > 21){ hand.busted = true; hand.outcome = 'Bust'; }
+        hand.done = true; hand.stood = !hand.busted;
+        advanceFlow();
+        updateUI(); updateButtons(); broadcastState();
+      });
+      broadcastState();
+      return;
+    }
+    if(action === 'hit'){
+      state.phase = 'animating';
+      hand.acted = true;
+      queueCard('bot', bot.activeHand, drawCard(), false, botIndex);
+      processQueue(() => {
+        const total = handTotals(hand.cards).total;
+        if(total > 21){ hand.busted = true; hand.done = true; hand.outcome = 'Bust'; }
+        else if(hand.splitAce){ hand.done = true; hand.stood = true; }
+        advanceFlow();
+        updateUI(); updateButtons(); broadcastState();
+      });
+      broadcastState();
+    }
+  }
+
+  function playBots(){
+    if(state.phase !== 'bots') return;
+    const next = findNextBotTurn();
+    if(!next){
+      revealHoleAndPlayDealer();
+      return;
+    }
+    state.currentBot = next.botIndex;
+    state.currentBotHand = next.handIndex;
+    const bot = state.bots[next.botIndex];
+    bot.activeHand = next.handIndex;
+    const hand = bot.hands[next.handIndex];
+    if(!hand || hand.done){
+      setTimeout(playBots, botDelayMs(120));
+      return;
+    }
+    const action = chooseBotAction(bot, hand);
+    state.message = `${bot.name} chooses ${action}.`;
+    updateUI();
+
+    if(action === 'stand'){
+      hand.stood = true; hand.done = true; hand.acted = true;
+      setTimeout(playBots, botDelayMs(380));
+      return;
+    }
+    if(action === 'surrender' && canSurrenderBot(bot, hand)){
+      hand.surrendered = true; hand.done = true; hand.acted = true;
+      settleBotHand(bot, hand, 'surrender');
+      setTimeout(playBots, botDelayMs(420));
+      return;
+    }
+    if(action === 'split' && canSplitBot(bot, hand)){
+      bot.bankroll -= hand.bet;
+      const second = hand.cards.pop();
+      const newHandObj = newHand(hand.bet);
+      newHandObj.cards.push(second);
+      hand.hasSplit = true;
+      newHandObj.hasSplit = true;
+      const isAceSplit = hand.cards[0].rank === 'A' && second.rank === 'A';
+      hand.splitAce = isAceSplit;
+      newHandObj.splitAce = isAceSplit;
+      bot.hands.push(newHandObj);
+      state.phase = 'animating';
+      queueCard('bot', 0, drawCard(), false, next.botIndex);
+      queueCard('bot', 1, drawCard(), false, next.botIndex);
+      processQueue(() => {
+        if(isAceSplit){
+          hand.done = true; hand.stood = true;
+          newHandObj.done = true; newHandObj.stood = true;
+        }
+        state.phase = 'bots';
+        setTimeout(playBots, botDelayMs(420));
+      });
+      return;
+    }
+    if(action === 'double' && canDoubleBot(bot, hand)){
+      bot.bankroll -= hand.bet;
+      hand.bet *= 2;
+      hand.doubled = true;
+      hand.acted = true;
+      state.phase = 'animating';
+      queueCard('bot', next.handIndex, drawCard(), false, next.botIndex);
+      processQueue(() => {
+        const total = handTotals(hand.cards).total;
+        if(total > 21){ hand.busted = true; hand.outcome = 'Bust'; }
+        hand.done = true; hand.stood = !hand.busted;
+        state.phase = 'bots';
+        setTimeout(playBots, botDelayMs(420));
+      });
+      return;
+    }
+    state.phase = 'animating';
+    hand.acted = true;
+    queueCard('bot', next.handIndex, drawCard(), false, next.botIndex);
+    processQueue(() => {
+      const total = handTotals(hand.cards).total;
+      if(total > 21){
+        hand.busted = true; hand.done = true; hand.outcome = 'Bust';
+      } else if(hand.splitAce){
+        hand.done = true; hand.stood = true;
+      }
+      state.phase = 'bots';
+      setTimeout(playBots, botDelayMs(420));
+    });
+  }
+
+  function bind(){
+    ui.startBtn.onclick = startGame;
+    ui.playerNameInput.oninput = () => {
+      state.multiplayer.playerName = getPlayerName();
+    };
+    ui.lobbyCodeInput.oninput = () => {
+      ui.lobbyCodeInput.value = cleanLobbyCode(ui.lobbyCodeInput.value);
+    };
+    ui.createLobbyBtn.onclick = hostLobby;
+    ui.joinLobbyBtn.onclick = joinLobby;
+    ui.leaveLobbyBtn.onclick = leaveLobby;
+    ui.soundBtn.onclick = () => {
+      state.sound = !state.sound;
+      ui.soundBtn.textContent = `Sound: ${state.sound ? 'On' : 'Off'}`;
+      if(state.sound) sfx.click();
+      music.sync(true);
+    };
+    ui.musicBtn.onclick = () => {
+      music.toggle();
+    };
+    ui.botCountSlider.oninput = () => {
+      configureBots();
+      if(ui.menu.classList.contains('hidden')) state.message = `Table updated for ${state.botConfig.count} bots.`;
+    };
+    ui.botSkillSelect.onchange = () => {
+      configureBots();
+      if(ui.menu.classList.contains('hidden')) state.message = `Bots now play at ${SKILL_LABELS[state.botConfig.skill]} skill.`;
+    };
+    ui.dealSpeedSlider.oninput = () => {
+      configureSpeed();
+      if(ui.menu.classList.contains('hidden')){
+        state.message = `Deal speed set to ${SPEED_LABELS[state.speedLevel]}.`;
+        updateUI();
+      }
+    };
+    ui.dealBtn.onclick = () => {
+      if(isGuest()) return;
+      startGame();
+      beginDeal();
+    };
+    ui.hitBtn.onclick = () => isGuest() ? sendGuestAction('hit') : hit();
+    ui.standBtn.onclick = () => isGuest() ? sendGuestAction('stand') : stand();
+    ui.doubleBtn.onclick = () => isGuest() ? sendGuestAction('double') : doubleDown();
+    ui.splitBtn.onclick = () => isGuest() ? sendGuestAction('split') : split();
+    ui.surrenderBtn.onclick = () => isGuest() ? sendGuestAction('surrender') : surrender();
+    ui.clearBtn.onclick = () => { if(!isGuest()) clearBet(); };
+    ui.newRoundBtn.onclick = () => { if(!isGuest()) nextRound(); };
+    document.querySelectorAll('[data-chip]').forEach(btn => btn.onclick = () => { if(!isGuest()) placeBet(Number(btn.dataset.chip)); });
+    addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if(k==='d') { if(!isGuest()){ startGame(); beginDeal(); } }
+      else if(k==='h') { isGuest() ? sendGuestAction('hit') : hit(); }
+      else if(k==='s') { isGuest() ? sendGuestAction('stand') : stand(); }
+      else if(k==='x') { isGuest() ? sendGuestAction('double') : doubleDown(); }
+      else if(k==='p') { isGuest() ? sendGuestAction('split') : split(); }
+      else if(k==='r') { isGuest() ? sendGuestAction('surrender') : surrender(); }
+      else if(k==='c') { if(!isGuest()) clearBet(); }
+      else if(k==='n') { if(!isGuest()) nextRound(); }
+      else if(['1','2','3','4'].includes(k)) { if(!isGuest()) [5,25,100,500][Number(k)-1] && placeBet([5,25,100,500][Number(k)-1]); }
+    });
+  }
+
+  bind();
+  syncMusicButton();
+  configureBots();
+  configureSpeed();
+  shuffleShoe();
+  updateLobbyUI();
+  updateUI();
+  updateButtons();
+  draw();
+})();
+</script>
+</body>
+</html>
