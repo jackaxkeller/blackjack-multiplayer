@@ -48,6 +48,47 @@
     grid-template-columns:1.1fr .9fr;
     gap:24px;
   }
+  @media (min-width: 921px){
+    .menu-card{
+      width:min(900px, 84vw);
+      padding:24px;
+      gap:20px;
+      transform:scale(.9);
+      transform-origin:center center;
+    }
+    .rules{
+      padding:14px 16px;
+      align-self:start;
+      min-height:0;
+    }
+    .rules h2{
+      margin-bottom:8px;
+      font-size:24px;
+    }
+    .rules ul{
+      grid-template-columns:1fr 1fr;
+      gap:6px 16px;
+      font-size:13px;
+      line-height:1.25;
+      padding-left:18px;
+    }
+    .subtitle{
+      font-size:15px;
+      margin:10px 0 18px;
+      max-width:52ch;
+    }
+    .config-card{
+      margin:14px 0 10px;
+      padding:14px 16px;
+    }
+    .config-note{
+      font-size:12px;
+    }
+    .legend{
+      margin-top:10px;
+      font-size:12px;
+    }
+  }
   .title{font-size:clamp(34px,5vw,62px);font-weight:900;line-height:1;letter-spacing:.02em;margin:0}
   .subtitle{font-size:16px;opacity:.9;margin:12px 0 24px;max-width:56ch}
   .shine{background:linear-gradient(180deg,#fff7d8,#e8b840 60%,#a06f06);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 2px 18px rgba(246,214,117,.15)}
@@ -785,6 +826,35 @@
   function humanSeatBotIndex(seat = state.multiplayer.seat){
     if(/^bot\d+$/.test(seat)) return Number(seat.replace('bot',''));
     return -1;
+  }
+  function getPerspectiveBot(){
+    const botIndex = humanSeatBotIndex();
+    return botIndex >= 0 ? state.bots[botIndex] || null : null;
+  }
+  function getPerspectiveHands(){
+    if(isGuest()){
+      return getPerspectiveBot()?.hands || [];
+    }
+    return state.hands;
+  }
+  function getPerspectiveActiveHandIndex(){
+    if(isGuest()){
+      return getPerspectiveBot()?.activeHand || 0;
+    }
+    return state.activeHand;
+  }
+  function getPerspectiveBankroll(){
+    if(isGuest()){
+      return getPerspectiveBot()?.bankroll ?? state.bankroll;
+    }
+    return state.bankroll;
+  }
+  function getPerspectiveBaseBet(){
+    if(isGuest()){
+      const bot = getPerspectiveBot();
+      return bot?.bet ?? bot?.hands?.[0]?.bet ?? 0;
+    }
+    return state.baseBet;
   }
   function isHumanControlledBot(index){
     return Object.entries(state.multiplayer.seats || {}).some(([seat, pid]) => seat === `bot${index}` && !!pid);
@@ -1750,8 +1820,8 @@
   }
 
   function updateUI(){
-    ui.bankroll.textContent = `$${state.bankroll.toFixed(0)}`;
-    ui.bet.textContent = `$${state.baseBet.toFixed(0)}`;
+    ui.bankroll.textContent = `$${getPerspectiveBankroll().toFixed(0)}`;
+    ui.bet.textContent = `$${getPerspectiveBaseBet().toFixed(0)}`;
     ui.shoeInfo.textContent = `${(state.shoe.length / 52).toFixed(2)} decks`;
     ui.countInfo.textContent = state.phase === 'roundOver' ? countDisplay() : 'Shown after round';
     ui.statusText.textContent = state.message;
@@ -1913,6 +1983,7 @@
   function drawBotAreas(){
     const centers = getBotCenters();
     state.bots.forEach((bot, i) => {
+      if(isGuest() && i === humanSeatBotIndex()) return;
       const seat = centers[i];
       const activeBot = state.phase === 'bots' && i === state.currentBot;
       const shifts = bot.hands.length === 1 ? [0] : [-68, 68];
@@ -1940,13 +2011,20 @@
   }
 
   function drawPlayerAreas(){
-    const centers = state.hands.length === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
-    state.hands.forEach((hand, i) => {
+    const perspectiveHands = getPerspectiveHands();
+    const perspectiveBot = getPerspectiveBot();
+    const activePerspectiveHand = getPerspectiveActiveHandIndex();
+    const centers = perspectiveHands.length === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
+    perspectiveHands.forEach((hand, i) => {
       const center = centers[i] || innerWidth/2;
-      const active = state.phase === 'player' && i === state.activeHand && !hand.done;
+      const active = isGuest()
+        ? (state.phase === 'bots' && humanSeatBotIndex() === state.currentBot && i === activePerspectiveHand && !hand.done)
+        : (state.phase === 'player' && i === activePerspectiveHand && !hand.done);
       const handY = getPlayerHandY();
-      drawHandBlock(hand.cards, center, handY, {revealAll:true, active, hand, label:``});
-      const total = hand.cards.length ? handTotals(hand.cards).total : 0;
+      const label = isGuest()
+        ? (i === 0 ? (state.multiplayer.playerName || perspectiveBot?.name || 'You') : `${state.multiplayer.playerName || perspectiveBot?.name || 'You'} • Split`)
+        : ``;
+      drawHandBlock(hand.cards, center, handY, {revealAll:true, active, hand, label});
       if(hand.outcome){
         ctx.save();
         ctx.fillStyle = 'rgba(0,0,0,.45)';
