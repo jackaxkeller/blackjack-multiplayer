@@ -886,6 +886,24 @@
     const member = state.multiplayer.members.find(m => m.id === pid);
     return member?.name || fallback;
   }
+  function findDuplicateLobbyNames(){
+    const normalized = new Map();
+    const duplicates = [];
+    for(const member of (state.multiplayer.members || [])){
+      const rawName = String(member?.name || '').trim();
+      if(!rawName) continue;
+      const key = rawName.toLowerCase();
+      if(normalized.has(key)){
+        duplicates.push(rawName);
+      } else {
+        normalized.set(key, rawName);
+      }
+    }
+    return [...new Set(duplicates)];
+  }
+  function lobbyNamesAreUnique(){
+    return findDuplicateLobbyNames().length === 0;
+  }
   function multiplayerStatus(text){
     if(ui.lobbyStatus) ui.lobbyStatus.textContent = text;
   }
@@ -1498,6 +1516,12 @@
   }
 
   function startGame(){
+    if(isHost() && !lobbyNamesAreUnique()){
+      const duplicates = findDuplicateLobbyNames().join(', ');
+      multiplayerStatus(`Cannot start. Duplicate player names in lobby: ${duplicates}.`);
+      updateLobbyUI();
+      return;
+    }
     if(!state.started){
       const br = Number(ui.bankrollInput?.value || 1000);
       if(!isNaN(br) && br > 0){
@@ -1894,6 +1918,7 @@
     state.baseBet = 0;
     updateRoundOutcomeLabels();
     updateUI(); updateButtons();
+    broadcastState();
   }
 
   function nextRound(){
@@ -2155,19 +2180,23 @@
   function drawBotAreas(){
     if(isGuest()){
       const centers = getGuestTopCenters();
-      const hostShifts = state.hands.length === 1 ? [0] : [-68, 68];
+      const hostSeat = centers[0] || {x:innerWidth/2, y:Math.min(innerHeight * 0.46, 330)};
+      const hostCenters = state.hands.length === 1
+        ? [hostSeat.x]
+        : state.hands.length === 2
+          ? [hostSeat.x - (isPhone() ? 44 : 68), hostSeat.x + (isPhone() ? 44 : 68)]
+          : Array.from({length: state.hands.length}, (_, idx) => hostSeat.x + (idx - (state.hands.length - 1) / 2) * (isPhone() ? 54 : 84));
       state.hands.forEach((hand, handIndex) => {
-        const seat = centers[0] || {x:innerWidth/2, y:Math.min(innerHeight * 0.46, 330)};
-        const centerX = seat.x + (hostShifts[handIndex] || 0);
+        const centerX = hostCenters[handIndex] || hostSeat.x;
         const active = state.phase === 'player' && handIndex === state.activeHand && !hand.done;
         if(active){
           ctx.save();
           ctx.strokeStyle = 'rgba(122,224,255,.75)'; ctx.lineWidth = 3;
-          roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
+          roundedRect(ctx, centerX-(isPhone()?72:92), hostSeat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
           ctx.restore();
         }
         const hostName = assignedNameForSeat('player', 'Host');
-        drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? hostName : `${hostName} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        drawHandBlock(hand.cards, centerX, hostSeat.y, {revealAll:true, active, hand, label:handIndex === 0 ? hostName : `${hostName} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
       });
       state.bots.forEach((bot, i) => {
         if(i === humanSeatBotIndex()) return;
@@ -2569,15 +2598,19 @@
     const action = chooseBotAction(bot, hand);
     state.message = `${bot.name} chooses ${action}.`;
     updateUI();
+    updateButtons();
+    broadcastState();
 
     if(action === 'stand'){
       hand.stood = true; hand.done = true; hand.acted = true;
+      updateUI(); updateButtons(); broadcastState();
       setTimeout(playBots, botDelayMs(380));
       return;
     }
     if(action === 'surrender' && canSurrenderBot(bot, hand)){
       hand.surrendered = true; hand.done = true; hand.acted = true;
       settleBotHand(bot, hand, 'surrender');
+      updateUI(); updateButtons(); broadcastState();
       setTimeout(playBots, botDelayMs(420));
       return;
     }
@@ -2601,8 +2634,10 @@
           newHandObj.done = true; newHandObj.stood = true;
         }
         state.phase = 'bots';
+        updateUI(); updateButtons(); broadcastState();
         setTimeout(playBots, botDelayMs(420));
       });
+      broadcastState();
       return;
     }
     if(action === 'double' && canDoubleBot(bot, hand)){
@@ -2617,8 +2652,10 @@
         if(total > 21){ hand.busted = true; hand.outcome = 'Bust'; }
         hand.done = true; hand.stood = !hand.busted;
         state.phase = 'bots';
+        updateUI(); updateButtons(); broadcastState();
         setTimeout(playBots, botDelayMs(420));
       });
+      broadcastState();
       return;
     }
     state.phase = 'animating';
@@ -2632,8 +2669,10 @@
         hand.done = true; hand.stood = true;
       }
       state.phase = 'bots';
+      updateUI(); updateButtons(); broadcastState();
       setTimeout(playBots, botDelayMs(420));
     });
+    broadcastState();
   }
 
   function bind(){
