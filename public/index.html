@@ -1251,6 +1251,10 @@
     const botIndex = Number(msg.botIndex);
     const seat = `bot${botIndex}`;
     if(state.multiplayer.seats?.[seat] !== msg.from) return;
+    const turn = getBotHandByTurn(botIndex);
+    if(turn.bot){
+      turn.bot.activeHand = turn.handIndex >= 0 ? turn.handIndex : (turn.bot.activeHand || 0);
+    }
     if(msg.action === 'bet' && remoteSeatCanBet(botIndex)) {
       const bot = state.bots[botIndex];
       const amount = Number(msg.amount) || 0;
@@ -1483,14 +1487,20 @@
 
   function currentHand(){ return state.hands[state.activeHand]; }
   function currentBotObj(){ return state.bots[state.currentBot]; }
-  function currentBotHandObj(){ const bot = currentBotObj(); return bot ? bot.hands[bot.activeHand] : null; }
+  function currentBotHandObj(){ const bot = currentBotObj(); return bot ? bot.hands[state.currentBotHand ?? bot.activeHand] || bot.hands[bot.activeHand] || null : null; }
+  function getBotHandByTurn(botIndex){
+    const bot = state.bots[botIndex];
+    if(!bot) return {bot:null, hand:null, handIndex:-1};
+    const handIndex = state.currentBot === botIndex ? (state.currentBotHand ?? bot.activeHand ?? 0) : (bot.activeHand ?? 0);
+    return {bot, hand: bot.hands[handIndex] || null, handIndex};
+  }
 
   function canSplitPlayer(hand){ return hand.cards.length === 2 && hand.cards[0].rank === hand.cards[1].rank && !hand.hasSplit && state.hands.length === 1 && state.bankroll >= hand.bet; }
   function canDoublePlayer(hand){ return hand.cards.length === 2 && !hand.done && state.bankroll >= hand.bet; }
   function canSurrenderPlayer(hand){ return hand.cards.length === 2 && !hand.acted && state.hands.length === 1; }
-  function canSplitBot(bot, hand){ return hand.cards.length === 2 && hand.cards[0].rank === hand.cards[1].rank && !hand.hasSplit && bot.hands.length === 1 && bot.bankroll >= hand.bet; }
-  function canDoubleBot(bot, hand){ return hand.cards.length === 2 && !hand.done && bot.bankroll >= hand.bet; }
-  function canSurrenderBot(bot, hand){ return hand.cards.length === 2 && !hand.acted && bot.hands.length === 1; }
+  function canSplitBot(bot, hand, handIndexOverride=null){ const handIndex = handIndexOverride ?? bot.hands.indexOf(hand); return !!hand && hand.cards.length === 2 && hand.cards[0].rank === hand.cards[1].rank && !hand.hasSplit && handIndex === 0 && bot.hands.length === 1 && bot.bankroll >= hand.bet; }
+  function canDoubleBot(bot, hand){ return !!hand && hand.cards.length === 2 && !hand.done && bot.bankroll >= hand.bet; }
+  function canSurrenderBot(bot, hand, handIndexOverride=null){ const handIndex = handIndexOverride ?? bot.hands.indexOf(hand); return !!hand && hand.cards.length === 2 && !hand.acted && handIndex === 0 && bot.hands.length === 1; }
 
   function placeBet(amount){
     if(state.phase !== 'betting') return;
@@ -1706,6 +1716,7 @@
     const nextBot = findNextBotTurn();
     if(nextBot){
       state.currentBot = nextBot.botIndex;
+      state.currentBotHand = nextBot.handIndex;
       state.bots[state.currentBot].activeHand = nextBot.handIndex;
       state.phase = 'bots';
       if(isHumanControlledBot(nextBot.botIndex)){
@@ -1960,7 +1971,8 @@
     if(isGuest()){
       const botIndex = humanSeatBotIndex();
       const bot = state.bots[botIndex];
-      const guestHand = bot?.hands?.[bot?.activeHand || 0];
+      const handIndex = state.currentBot === botIndex ? (state.currentBotHand ?? bot?.activeHand ?? 0) : (bot?.activeHand ?? 0);
+      const guestHand = bot?.hands?.[handIndex];
       const guestTurn = botIndex >= 0 && state.phase === 'bots' && state.currentBot === botIndex && guestHand && !guestHand.done;
       const canGuestBet = botIndex >= 0 && state.phase === 'betting';
       ui.dealBtn.disabled = true;
@@ -2505,24 +2517,24 @@
 
 
   function executeHumanBotAction(botIndex, action){
-    const bot = state.bots[botIndex];
-    if(!bot) return;
-    const hand = bot.hands[bot.activeHand];
-    if(!hand || hand.done) return;
+    const { bot, hand, handIndex } = getBotHandByTurn(botIndex);
+    if(!bot || !hand || hand.done) return;
+    bot.activeHand = handIndex;
+    state.currentBotHand = handIndex;
     if(action === 'stand'){
       hand.stood = true; hand.done = true; hand.acted = true;
       advanceFlow();
       updateUI(); updateButtons(); broadcastState();
       return;
     }
-    if(action === 'surrender' && canSurrenderBot(bot, hand)){
+    if(action === 'surrender' && canSurrenderBot(bot, hand, handIndex)){
       hand.surrendered = true; hand.done = true; hand.outcome = 'Surrender';
       bot.bankroll += hand.bet / 2;
       advanceFlow();
       updateUI(); updateButtons(); broadcastState();
       return;
     }
-    if(action === 'split' && canSplitBot(bot, hand)){
+    if(action === 'split' && canSplitBot(bot, hand, handIndex)){
       bot.bankroll -= hand.bet;
       const second = hand.cards.pop();
       const newHandObj = newHand(hand.bet);
@@ -2534,9 +2546,12 @@
       newHandObj.splitAce = isAceSplit;
       bot.hands.push(newHandObj);
       state.phase = 'animating';
-      queueCard('bot', 0, drawCard(), false, botIndex);
-      queueCard('bot', 1, drawCard(), false, botIndex);
+      const newHandIndex = bot.hands.length - 1;
+      queueCard('bot', handIndex, drawCard(), false, botIndex);
+      queueCard('bot', newHandIndex, drawCard(), false, botIndex);
       processQueue(() => {
+        bot.activeHand = handIndex;
+        state.currentBotHand = handIndex;
         if(isAceSplit){
           hand.done = true; hand.stood = true;
           newHandObj.done = true; newHandObj.stood = true;
@@ -2553,8 +2568,10 @@
       hand.doubled = true;
       hand.acted = true;
       state.phase = 'animating';
-      queueCard('bot', bot.activeHand, drawCard(), false, botIndex);
+      queueCard('bot', handIndex, drawCard(), false, botIndex);
       processQueue(() => {
+        bot.activeHand = handIndex;
+        state.currentBotHand = handIndex;
         const total = handTotals(hand.cards).total;
         if(total > 21){ hand.busted = true; hand.outcome = 'Bust'; }
         hand.done = true; hand.stood = !hand.busted;
@@ -2567,8 +2584,10 @@
     if(action === 'hit'){
       state.phase = 'animating';
       hand.acted = true;
-      queueCard('bot', bot.activeHand, drawCard(), false, botIndex);
+      queueCard('bot', handIndex, drawCard(), false, botIndex);
       processQueue(() => {
+        bot.activeHand = handIndex;
+        state.currentBotHand = handIndex;
         const total = handTotals(hand.cards).total;
         if(total > 21){ hand.busted = true; hand.done = true; hand.outcome = 'Bust'; }
         else if(hand.splitAce){ hand.done = true; hand.stood = true; }
