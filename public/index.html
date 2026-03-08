@@ -1427,7 +1427,7 @@
     state.dealingQueue = [];
     state.animations = [];
     state.particles = [];
-    state.bots.forEach(bot => { bot.hands = []; bot.activeHand = 0; bot.roundOutcome = ''; bot.bet = 0; });
+    state.bots.forEach(bot => { bot.hands = []; bot.activeHand = 0; bot.roundOutcome = ''; });
   }
 
   function botBetSize(bot){
@@ -1450,7 +1450,7 @@
         hands: [],
         activeHand: 0,
         roundOutcome: '',
-        bet: 0,
+        bet: existing ? (existing.bet || 0) : 0,
       });
     }
     state.bots = next;
@@ -1996,8 +1996,55 @@
     return Array.from({length:count}, (_,i) => ({x:left + span*(i/(count-1)), y}));
   }
 
+  function getGuestTopSeatCount(){
+    return 1 + state.bots.filter((_, i) => i !== humanSeatBotIndex()).length;
+  }
+
+  function getGuestTopCenters(){
+    const count = Math.max(1, getGuestTopSeatCount());
+    if(isPhone()){
+      const { topY, bottomY } = getMobileBotLayout();
+      if(count <= 3){
+        const xs = count === 1
+          ? [innerWidth * 0.5]
+          : count === 2
+            ? [innerWidth * 0.28, innerWidth * 0.72]
+            : [innerWidth * 0.2, innerWidth * 0.5, innerWidth * 0.8];
+        return xs.map(x => ({x, y: topY}));
+      }
+      const firstRowCount = Math.min(3, count);
+      const secondRowCount = Math.max(0, count - 3);
+      const firstRowXs = [innerWidth * 0.2, innerWidth * 0.5, innerWidth * 0.8].slice(0, firstRowCount);
+      const secondRowXs = secondRowCount === 1
+        ? [innerWidth * 0.5]
+        : secondRowCount === 2
+          ? [innerWidth * 0.32, innerWidth * 0.68]
+          : [innerWidth * 0.2, innerWidth * 0.5, innerWidth * 0.8];
+      return [
+        ...firstRowXs.map(x => ({x, y: topY})),
+        ...secondRowXs.slice(0, secondRowCount).map(x => ({x, y: bottomY}))
+      ];
+    }
+    const y = Math.min(innerHeight * 0.46, 330);
+    if(count === 1) return [{x:innerWidth/2, y}];
+    const left = innerWidth * 0.2;
+    const right = innerWidth * 0.8;
+    const span = right - left;
+    return Array.from({length:count}, (_,i) => ({x:left + span*(i/(count-1)), y}));
+  }
+
+  function getGuestTopSeatIndexForBot(botIndex){
+    let slot = 1;
+    for(let i=0;i<state.bots.length;i++){
+      if(i === humanSeatBotIndex()) continue;
+      if(i === botIndex) return slot;
+      slot++;
+    }
+    return 1;
+  }
+
   function getCardDestination(target, handIndex, cardIndex, botIndex=null){
-    if(isGuest() && target === 'bot' && botIndex === humanSeatBotIndex()) return getCardDestination('player', handIndex, cardIndex, null);
+    if(isGuest() && target === 'bot' && botIndex === humanSeatBotIndex()) return getCardDestination('player-local', handIndex, cardIndex, null);
     const phoneScale = isPhone() ? 0.82 : 1;
     const cardW = 92 * phoneScale, gap = 28 * phoneScale;
     if(target === 'dealer'){
@@ -2005,17 +2052,34 @@
       const startX = innerWidth/2 - totalW/2;
       return {x:startX + cardIndex*gap, y:isPhone() ? 116 : 110};
     }
-    if(target === 'player'){
-      const totalHands = state.hands.length || 1;
+    if(target === 'player-local'){
+      const perspectiveHands = getPerspectiveHands();
+      const totalHands = perspectiveHands.length || 1;
       const centers = totalHands === 1 ? [innerWidth/2] : (isPhone() ? [innerWidth/2 - 118, innerWidth/2 + 118] : [innerWidth/2 - 210, innerWidth/2 + 210]);
       const centerX = centers[handIndex] || innerWidth/2;
-      const hand = state.hands[handIndex] || {cards:[]};
+      const hand = perspectiveHands[handIndex] || {cards:[]};
       const totalW = cardW + Math.max(0, hand.cards.length)*gap;
       const startX = centerX - totalW/2;
       return {x:startX + cardIndex*gap, y:isPhone() ? innerHeight - 330 : innerHeight - 270};
     }
-    const centers = getBotCenters();
-    const seat = centers[botIndex] || {x:innerWidth/2, y:innerHeight*0.44};
+    if(target === 'player'){
+      if(isGuest()){
+        const seat = getGuestTopCenters()[0] || {x:innerWidth/2, y:innerHeight*0.44};
+        const hand = state.hands[handIndex] || {cards:[]};
+        const centerShift = state.hands.length === 1 ? [0] : (isPhone() ? [-44, 44] : [-68, 68]);
+        const centerX = seat.x + (centerShift[handIndex] || 0);
+        const scale = 0.7 * phoneScale;
+        const scaledW = 92 * scale;
+        const scaledGap = 28 * scale;
+        const totalW = scaledW + Math.max(0, hand.cards.length)*scaledGap;
+        const startX = centerX - totalW/2;
+        return {x:startX + cardIndex*scaledGap, y:seat.y};
+      }
+      return getCardDestination('player-local', handIndex, cardIndex, null);
+    }
+    const centers = isGuest() ? getGuestTopCenters() : getBotCenters();
+    const guestTopIndex = isGuest() ? getGuestTopSeatIndexForBot(botIndex) : botIndex;
+    const seat = centers[guestTopIndex] || {x:innerWidth/2, y:innerHeight*0.44};
     const bot = state.bots[botIndex] || {hands:[{cards:[]}]};
     const centerShift = bot.hands.length === 1 ? [0] : (isPhone() ? [-44, 44] : [-68, 68]);
     const centerX = seat.x + (centerShift[handIndex] || 0);
@@ -2089,9 +2153,51 @@
   }
 
   function drawBotAreas(){
+    if(isGuest()){
+      const centers = getGuestTopCenters();
+      const hostShifts = state.hands.length === 1 ? [0] : [-68, 68];
+      state.hands.forEach((hand, handIndex) => {
+        const seat = centers[0] || {x:innerWidth/2, y:Math.min(innerHeight * 0.46, 330)};
+        const centerX = seat.x + (hostShifts[handIndex] || 0);
+        const active = state.phase === 'player' && handIndex === state.activeHand && !hand.done;
+        if(active){
+          ctx.save();
+          ctx.strokeStyle = 'rgba(122,224,255,.75)'; ctx.lineWidth = 3;
+          roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
+          ctx.restore();
+        }
+        const hostName = assignedNameForSeat('player', 'Host');
+        drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? hostName : `${hostName} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+      });
+      state.bots.forEach((bot, i) => {
+        if(i === humanSeatBotIndex()) return;
+        const seat = centers[getGuestTopSeatIndexForBot(i)] || centers[0] || {x:innerWidth/2, y:Math.min(innerHeight * 0.46, 330)};
+        const activeBot = state.phase === 'bots' && i === state.currentBot;
+        const shifts = bot.hands.length === 1 ? [0] : [-68, 68];
+        bot.hands.forEach((hand, handIndex) => {
+          const centerX = seat.x + (shifts[handIndex] || 0);
+          const active = activeBot && bot.activeHand === handIndex && !hand.done;
+          if(active){
+            ctx.save();
+            ctx.strokeStyle = 'rgba(122,224,255,.75)'; ctx.lineWidth = 3;
+            roundedRect(ctx, centerX-(isPhone()?72:92), seat.y-(isPhone()?34:46), isPhone()?144:184, isPhone()?116:145, 22); ctx.stroke();
+            ctx.restore();
+          }
+          drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
+        });
+        ctx.save();
+        ctx.textAlign='center';
+        if(bot.roundOutcome){
+          ctx.fillStyle='rgba(255,231,167,.95)';
+          ctx.font = isPhone() ? '900 10px Inter, sans-serif' : '900 12px Inter, sans-serif';
+          ctx.fillText(bot.roundOutcome.toUpperCase(), seat.x, seat.y + (isPhone() ? 118 : 132));
+        }
+        ctx.restore();
+      });
+      return;
+    }
     const centers = getBotCenters();
     state.bots.forEach((bot, i) => {
-      if(isGuest() && i === humanSeatBotIndex()) return;
       const seat = centers[i];
       const activeBot = state.phase === 'bots' && i === state.currentBot;
       const shifts = bot.hands.length === 1 ? [0] : [-68, 68];
@@ -2105,7 +2211,6 @@
           ctx.restore();
         }
         drawHandBlock(hand.cards, centerX, seat.y, {revealAll:true, active, hand, label:handIndex === 0 ? bot.name : `${bot.name} • Split`, scale:isPhone() ? 0.58 : 0.7, metaOffset:isPhone() ? 52 : 58});
-        const total = hand.cards.length ? handTotals(hand.cards).total : 0;
       });
       ctx.save();
       ctx.textAlign='center';
